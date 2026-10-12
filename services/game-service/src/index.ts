@@ -1,20 +1,20 @@
 import express from "express";
 import { redis } from "./config/redis.js";
-
+import { roomRouter } from "./routes/room-routes.js";
 
 const app = express();
 const PORT = 3001;
 
-// Allow the server to read JSON request bodies.
 app.use(express.json());
 
-// Check whether the Game Service is running.
 app.get("/health", (_req, res) => {
   res.status(200).json({
     status: "ok",
     service: "game-service",
   });
 });
+
+app.use("/rooms", roomRouter);
 
 async function startServer() {
   await redis.connect();
