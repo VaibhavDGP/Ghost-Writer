@@ -1,9 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Room } from "../types/room.js";
+import type { Player , Room } from "../types/room.js";
 import {
   findRoomByCode,
   saveNewRoom,
+  addPlayerToRoom,
 } from "../stores/room-store.js";
+
+import type { JoinRoomResult } from "../stores/room-store.js";
 
 const MAX_PLAYERS = 8;
 const MAX_CODE_ATTEMPTS = 5;
@@ -49,4 +52,17 @@ export async function getRoomByCode(
   code: string,
 ): Promise<Room | null> {
   return findRoomByCode(code);
+}
+
+export async function joinRoom(
+  code: string,
+  displayName: string,
+): Promise<JoinRoomResult> {
+  const player: Player = {
+    id: randomUUID(),
+    displayName,
+    joinedAt: new Date().toISOString(),
+  };
+
+  return addPlayerToRoom(code, player);
 }
