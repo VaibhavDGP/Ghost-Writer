@@ -1,9 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 
 const BASE_URL = "http://localhost:3001";
 
 async function request(path, { method = "GET", body } = {}) {
+  if (
+  method === "POST" &&
+  path.endsWith("/join") &&
+  body !== undefined
+) {
+  body = {
+    requestId: randomUUID(),
+    ...body,
+  };
+}
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: body === undefined
@@ -152,3 +163,105 @@ test("simultaneous joins respect capacity and retain every accepted player",
     }
   },
 );
+
+test("retrying a join returns the same player without adding another",
+  async () => {
+    const room = await createTestRoom();
+
+    const body = {
+      displayName: "Retry Guest",
+      requestId: randomUUID(),
+    };
+
+    const first = await request(`/rooms/${room.code}/join`, {
+      method: "POST",
+      body,
+    });
+
+    const retry = await request(`/rooms/${room.code}/join`, {
+      method: "POST",
+      body,
+    });
+
+    assert.equal(first.status, 200);
+    assert.equal(retry.status, 200);
+    assert.equal(typeof first.data.playerId, "string");
+    assert.equal(retry.data.playerId, first.data.playerId);
+
+    const fetched = await request(`/rooms/${room.code}`);
+
+    assert.equal(fetched.status, 200);
+    assert.equal(fetched.data.room.players.length, 2);
+    assert.ok(
+      fetched.data.room.players.some(
+        (player) => player.id === first.data.playerId,
+      ),
+    );
+  },
+);
+
+test("simultaneous retries create only one player", async () => {
+  const room = await createTestRoom();
+
+  const body = {
+    displayName: "Concurrent Retry Guest",
+    requestId: randomUUID(),
+  };
+
+  const results = await Promise.all(
+    Array.from({ length: 10 }, () =>
+      request(`/rooms/${room.code}/join`, {
+        method: "POST",
+        body,
+      }),
+    ),
+  );
+
+  for (const result of results) {
+    assert.equal(result.status, 200);
+    assert.equal(typeof result.data.playerId, "string");
+  }
+
+  const returnedIds = results.map((result) => result.data.playerId);
+
+  assert.equal(new Set(returnedIds).size, 1);
+
+  const fetched = await request(`/rooms/${room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.data.room.players.length, 2);
+});
+
+test("rejects reusing a request ID with a different name", async () => {
+  const room = await createTestRoom();
+  const requestId = randomUUID();
+
+  const first = await request(`/rooms/${room.code}/join`, {
+    method: "POST",
+    body: {
+      displayName: "Original Guest",
+      requestId,
+    },
+  });
+
+  assert.equal(first.status, 200);
+
+  const conflicting = await request(`/rooms/${room.code}/join`, {
+    method: "POST",
+    body: {
+      displayName: "Different Guest",
+      requestId,
+    },
+  });
+
+  assert.equal(conflicting.status, 409);
+
+  const fetched = await request(`/rooms/${room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.data.room.players.length, 2);
+  assert.equal(
+    fetched.data.room.players[1].displayName,
+    "Original Guest",
+  );
+});
