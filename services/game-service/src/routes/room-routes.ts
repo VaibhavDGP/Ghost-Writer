@@ -74,6 +74,7 @@ roomRouter.get("/:code", async (req, res) => {
 roomRouter.post("/:code/join", async (req, res) => {
   const code = req.params.code.trim().toUpperCase();
   const displayName: unknown = req.body?.displayName;
+  const requestId: unknown = req.body?.requestId;
 
   if (!/^[0-9A-F]{6}$/.test(code)) {
     res.status(400).json({
@@ -93,8 +94,25 @@ roomRouter.post("/:code/join", async (req, res) => {
     return;
   }
 
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (
+    typeof requestId !== "string" ||
+    !uuidPattern.test(requestId)
+  ) {
+    res.status(400).json({
+      error: "requestId must use UUID format.",
+    });
+    return;
+  }
+
   try {
-    const result = await joinRoom(code, displayName.trim());
+    const result = await joinRoom(
+      code,
+      displayName.trim(),
+      requestId.toLowerCase(),
+    );
 
     switch (result.outcome) {
       case "NOT_FOUND":
@@ -115,9 +133,16 @@ roomRouter.post("/:code/join", async (req, res) => {
         });
         return;
 
+      case "REQUEST_CONFLICT":
+        res.status(409).json({
+          error: "requestId was already used with a different displayName.",
+        });
+        return;
+
       case "JOINED":
         res.status(200).json({
           room: result.room,
+          playerId: result.playerId,
         });
         return;
     }
