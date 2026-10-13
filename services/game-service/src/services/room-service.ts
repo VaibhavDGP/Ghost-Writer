@@ -57,6 +57,7 @@ export async function getRoomByCode(
 export async function joinRoom(
   code: string,
   displayName: string,
+  requestId: string,
 ): Promise<JoinRoomResult> {
   const player: Player = {
     id: randomUUID(),
@@ -64,5 +65,5 @@ export async function joinRoom(
     joinedAt: new Date().toISOString(),
   };
 
-  return addPlayerToRoom(code, player);
+  return addPlayerToRoom(code, player, requestId);
 }
