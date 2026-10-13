@@ -4,9 +4,19 @@ import {
   findRoomByCode,
   saveNewRoom,
   addPlayerToRoom,
+  saveNewRoomWithSession,
+  findPlayerSession,
 } from "../stores/room-store.js";
 
-import type { JoinRoomResult } from "../stores/room-store.js";
+import type {
+  JoinRoomResult,
+  PlayerSessionResult,
+} from "../stores/room-store.js";
+
+import {
+  hashSessionToken,
+  isSessionToken,
+} from "./session-service.js";
 
 const MAX_PLAYERS = 8;
 const MAX_CODE_ATTEMPTS = 5;
@@ -66,4 +76,57 @@ export async function joinRoom(
   };
 
   return addPlayerToRoom(code, player, requestId);
+}
+
+export async function createRoomWithSession(
+  displayName: string,
+  sessionToken: string,
+): Promise<Room> {
+  if (!isSessionToken(sessionToken)) {
+    throw new Error("Invalid session token format.");
+  }
+
+  const tokenHash = hashSessionToken(sessionToken);
+  const hostPlayerId = randomUUID();
+  const createdAt = new Date().toISOString();
+
+  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+    const room: Room = {
+      id: randomUUID(),
+      code: generateRoomCode(),
+      hostPlayerId,
+      phase: "LOBBY",
+      players: [
+        {
+          id: hostPlayerId,
+          displayName,
+          joinedAt: createdAt,
+        },
+      ],
+      maxPlayers: MAX_PLAYERS,
+      createdAt,
+    };
+
+    const saved = await saveNewRoomWithSession(room, tokenHash);
+
+    if (saved) {
+      return room;
+    }
+  }
+
+  throw new Error("Unable to allocate a unique room code.");
+}
+
+export async function getPlayerSession(
+  code: string,
+  sessionToken: string,
+): Promise<PlayerSessionResult> {
+  if (!isSessionToken(sessionToken)) {
+    return { outcome: "UNAUTHORIZED" };
+  }
+
+  return findPlayerSession(
+    code,
+    hashSessionToken(sessionToken),
+  );
 }
