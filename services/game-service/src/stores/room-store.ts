@@ -128,3 +128,114 @@ export async function addPlayerToRoom(
 
   return JSON.parse(result) as JoinRoomResult;
 }
+
+function sessionsKey(code: string): string {
+  return `ghost-writer:room:${code}:sessions`;
+}
+
+const CREATE_ROOM_WITH_SESSION_SCRIPT = `
+  if redis.call("EXISTS", KEYS[1]) == 1 then
+    return 0
+  end
+
+  local room = cjson.decode(ARGV[1])
+
+  redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[3])
+
+  -- A code might be reused after an older room expires.
+  -- Remove any leftover metadata belonging to that older room.
+  redis.call("DEL", KEYS[2], KEYS[3])
+
+  redis.call("HSET", KEYS[2], ARGV[2], room.hostPlayerId)
+
+  local ttl = redis.call("PTTL", KEYS[1])
+  redis.call("PEXPIRE", KEYS[2], ttl)
+
+  return 1
+`;
+
+export async function saveNewRoomWithSession(
+  room: Room,
+  tokenHash: string,
+): Promise<boolean> {
+  const result = await redis.eval(
+    CREATE_ROOM_WITH_SESSION_SCRIPT,
+    {
+      keys: [
+        roomKey(room.code),
+        sessionsKey(room.code),
+        joinRequestsKey(room.code),
+      ],
+      arguments: [
+        JSON.stringify(room),
+        tokenHash,
+        String(ROOM_TTL_SECONDS),
+      ],
+    },
+  );
+
+  return result === 1;
+}
+
+export type PlayerSessionResult =
+  | {
+      outcome: "AUTHENTICATED";
+      roomId: string;
+      player: Player;
+      isHost: boolean;
+    }
+  | {
+      outcome: "UNAUTHORIZED";
+    };
+
+    const FIND_PLAYER_SESSION_SCRIPT = `
+  local data = redis.call("GET", KEYS[1])
+
+  if not data then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  local playerId = redis.call("HGET", KEYS[2], ARGV[1])
+
+  if not playerId then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  local room = cjson.decode(data)
+
+  for _, player in ipairs(room.players) do
+    if player.id == playerId then
+      return cjson.encode({
+        outcome = "AUTHENTICATED",
+        roomId = room.id,
+        player = player,
+        isHost = room.hostPlayerId == player.id
+      })
+    end
+  end
+
+  return cjson.encode({ outcome = "UNAUTHORIZED" })
+`;
+
+
+export async function findPlayerSession(
+  code: string,
+  tokenHash: string,
+): Promise<PlayerSessionResult> {
+  const result = await redis.eval(
+    FIND_PLAYER_SESSION_SCRIPT,
+    {
+      keys: [
+        roomKey(code),
+        sessionsKey(code),
+      ],
+      arguments: [tokenHash],
+    },
+  );
+
+  if (typeof result !== "string") {
+    throw new Error("Unexpected Redis session response.");
+  }
+
+  return JSON.parse(result) as PlayerSessionResult;
+}
