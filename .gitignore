@@ -1,1 +1,13 @@
+# Installed dependencies
 node_modules/
+
+# Compiled output
+dist/
+
+# Local environment settings
+.env
+.env.*
+!.env.example
+
+# Log files
+*.log
