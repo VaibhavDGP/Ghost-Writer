@@ -1,9 +1,15 @@
 import { Router } from "express";
 import {
-  createRoom,
+  createRoomWithSession,
   getRoomByCode,
+  getPlayerSession,
   joinRoom,
 } from "../services/room-service.js";
+
+import {
+  isSessionToken,
+  readBearerToken,
+} from "../services/session-service.js";
 
 export const roomRouter = Router();
 
@@ -12,6 +18,7 @@ export const roomRouter = Router();
 // POST /rooms
 roomRouter.post("/", async (req, res) => {
   const displayName: unknown = req.body?.displayName;
+  const sessionToken: unknown = req.body?.sessionToken;
 
   if (
     typeof displayName !== "string" ||
@@ -24,10 +31,23 @@ roomRouter.post("/", async (req, res) => {
     return;
   }
 
-  try {
-    const room = await createRoom(displayName.trim());
+  if (!isSessionToken(sessionToken)) {
+    res.status(400).json({
+      error: "sessionToken must contain 64 lowercase hexadecimal characters.",
+    });
+    return;
+  }
 
-    res.status(201).json({ room });
+  try {
+    const room = await createRoomWithSession(
+      displayName.trim(),
+      sessionToken,
+    );
+
+    res.status(201).json({
+      room,
+      playerId: room.hostPlayerId,
+    });
   } catch (error) {
     console.error("Failed to create room:", error);
 
@@ -151,6 +171,56 @@ roomRouter.post("/:code/join", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to join room.",
+    });
+  }
+});
+
+// GET /rooms/:code/me
+roomRouter.get("/:code/me", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  const code = req.params.code.trim().toUpperCase();
+
+  if (!/^[0-9A-F]{6}$/.test(code)) {
+    res.status(400).json({
+      error: "Room code must contain 6 hexadecimal characters.",
+    });
+    return;
+  }
+
+  const sessionToken = readBearerToken(
+    req.get("Authorization"),
+  );
+
+  if (sessionToken === null) {
+    res.set("WWW-Authenticate", "Bearer");
+    res.status(401).json({
+      error: "A valid session token is required.",
+    });
+    return;
+  }
+
+  try {
+    const result = await getPlayerSession(code, sessionToken);
+
+    if (result.outcome === "UNAUTHORIZED") {
+      res.set("WWW-Authenticate", "Bearer");
+      res.status(401).json({
+        error: "Invalid or expired player session.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      roomId: result.roomId,
+      player: result.player,
+      isHost: result.isHost,
+    });
+  } catch (error) {
+    console.error("Failed to look up player session:", error);
+
+    res.status(500).json({
+      error: "Failed to look up player session.",
     });
   }
 });
