@@ -3,6 +3,7 @@ import {
   createRoomWithSession,
   getRoomByCode,
   getPlayerSession,
+  startRoom,
   setPlayerReady,
   joinRoomWithSession,
 } from "../services/room-service.js";
@@ -317,6 +318,85 @@ roomRouter.patch("/:code/ready", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to update player readiness.",
+    });
+  }
+});
+
+// POST /rooms/:code/start
+roomRouter.post("/:code/start", async (req, res) => {
+  const code = req.params.code.trim().toUpperCase();
+
+  if (!/^[0-9A-F]{6}$/.test(code)) {
+    res.status(400).json({
+      error: "Room code must contain 6 hexadecimal characters.",
+    });
+    return;
+  }
+
+  const sessionToken = readBearerToken(
+    req.get("Authorization"),
+  );
+
+  if (sessionToken === null) {
+    res.set("WWW-Authenticate", "Bearer");
+    res.status(401).json({
+      error: "A valid session token is required.",
+    });
+    return;
+  }
+
+  try {
+    const result = await startRoom(code, sessionToken);
+
+    switch (result.outcome) {
+      case "NOT_FOUND":
+        res.status(404).json({
+          error: "Room not found or expired.",
+        });
+        return;
+
+      case "UNAUTHORIZED":
+        res.set("WWW-Authenticate", "Bearer");
+        res.status(401).json({
+          error: "Invalid or expired player session.",
+        });
+        return;
+
+      case "FORBIDDEN":
+        res.status(403).json({
+          error: "Only the host can start the game.",
+        });
+        return;
+
+      case "NOT_IN_LOBBY":
+        res.status(409).json({
+          error: "The room cannot be started in its current phase.",
+        });
+        return;
+
+      case "NOT_ENOUGH_PLAYERS":
+        res.status(409).json({
+          error: "At least two players are required to start.",
+        });
+        return;
+
+      case "PLAYERS_NOT_READY":
+        res.status(409).json({
+          error: "Every guest must be ready before starting.",
+        });
+        return;
+
+      case "STARTED":
+        res.status(200).json({
+          room: result.room,
+        });
+        return;
+    }
+  } catch (error) {
+    console.error("Failed to start room:", error);
+
+    res.status(500).json({
+      error: "Failed to start room.",
     });
   }
 });
