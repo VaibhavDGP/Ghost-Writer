@@ -525,3 +525,235 @@ test("rejects joining without a valid session token", async () => {
   assert.equal(fetched.status, 200);
   assert.equal(fetched.data.room.players.length, 1);
 });
+
+async function createReadinessFixture() {
+  const hostToken = randomBytes(32).toString("hex");
+
+  const created = await request("/rooms", {
+    method: "POST",
+    body: {
+      displayName: "Readiness Host",
+      sessionToken: hostToken,
+    },
+  });
+
+  assert.equal(created.status, 201);
+
+  const room = created.data.room;
+  const guests = [];
+
+  for (const displayName of ["Guest One", "Guest Two"]) {
+    const token = randomBytes(32).toString("hex");
+
+    const joined = await request(`/rooms/${room.code}/join`, {
+      method: "POST",
+      body: {
+        displayName,
+        sessionToken: token,
+      },
+    });
+
+    assert.equal(joined.status, 200);
+
+    guests.push({
+      token,
+      playerId: joined.data.playerId,
+    });
+  }
+
+  return { room, hostToken, guests };
+}
+
+async function updateReadiness(code, token, body) {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  if (token !== undefined) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `${BASE_URL}/rooms/${code}/ready`,
+    {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(body),
+    },
+  );
+
+  return {
+    status: response.status,
+    data: await response.json(),
+  };
+}
+
+test("a guest updates only their own readiness and can become unready",
+  async () => {
+    const { room, guests } = await createReadinessFixture();
+    const [firstGuest, secondGuest] = guests;
+
+    const before = await request(`/rooms/${room.code}`);
+    assert.equal(before.status, 200);
+
+    // Supplying another player's ID must not change who is updated.
+    const ready = await updateReadiness(
+      room.code,
+      firstGuest.token,
+      {
+        isReady: true,
+        playerId: secondGuest.playerId,
+      },
+    );
+
+    assert.equal(ready.status, 200);
+    assert.equal(ready.data.playerId, firstGuest.playerId);
+
+    const fetched = await request(`/rooms/${room.code}`);
+    assert.equal(fetched.status, 200);
+
+    const firstPlayer = fetched.data.room.players.find(
+      (player) => player.id === firstGuest.playerId,
+    );
+
+    assert.ok(firstPlayer);
+    assert.equal(firstPlayer.isReady, true);
+
+    for (const player of fetched.data.room.players) {
+      if (player.id !== firstGuest.playerId) {
+        const original = before.data.room.players.find(
+          (entry) => entry.id === player.id,
+        );
+
+        assert.deepEqual(player, original);
+      }
+    }
+
+    // Sending true twice should remain ready rather than toggle.
+    const repeated = await updateReadiness(
+      room.code,
+      firstGuest.token,
+      { isReady: true },
+    );
+
+    assert.equal(repeated.status, 200);
+
+    const repeatedPlayer = repeated.data.room.players.find(
+      (player) => player.id === firstGuest.playerId,
+    );
+
+    assert.equal(repeatedPlayer.isReady, true);
+
+    const unready = await updateReadiness(
+      room.code,
+      firstGuest.token,
+      { isReady: false },
+    );
+
+    assert.equal(unready.status, 200);
+
+    const finalRoom = await request(`/rooms/${room.code}`);
+    assert.equal(finalRoom.status, 200);
+
+    const finalPlayer = finalRoom.data.room.players.find(
+      (player) => player.id === firstGuest.playerId,
+    );
+
+    assert.equal(finalPlayer.isReady, false);
+    assert.equal(finalRoom.data.room.hostPlayerId, room.hostPlayerId);
+    assert.equal(finalRoom.data.room.phase, "LOBBY");
+  },
+);
+
+test("rejects the host attempting to mark ready", async () => {
+  const { room, hostToken } = await createReadinessFixture();
+
+  const before = await request(`/rooms/${room.code}`);
+  assert.equal(before.status, 200);
+
+  const result = await updateReadiness(
+    room.code,
+    hostToken,
+    { isReady: true },
+  );
+
+  assert.equal(result.status, 403);
+
+  const after = await request(`/rooms/${room.code}`);
+  assert.equal(after.status, 200);
+  assert.deepEqual(after.data.room, before.data.room);
+});
+
+test("rejects readiness changes without a session belonging to the room",
+  async () => {
+    const { room } = await createReadinessFixture();
+
+    const otherRoomToken = randomBytes(32).toString("hex");
+
+    const otherRoom = await request("/rooms", {
+      method: "POST",
+      body: {
+        displayName: "Other Host",
+        sessionToken: otherRoomToken,
+      },
+    });
+
+    assert.equal(otherRoom.status, 201);
+
+    const before = await request(`/rooms/${room.code}`);
+    assert.equal(before.status, 200);
+
+    const invalidTokens = [
+      undefined,
+      "invalid",
+      randomBytes(32).toString("hex"),
+      otherRoomToken,
+    ];
+
+    for (const token of invalidTokens) {
+      const result = await updateReadiness(
+        room.code,
+        token,
+        { isReady: true },
+      );
+
+      assert.equal(result.status, 401);
+    }
+
+    const after = await request(`/rooms/${room.code}`);
+    assert.equal(after.status, 200);
+    assert.deepEqual(after.data.room, before.data.room);
+  },
+);
+
+test("rejects invalid readiness values and malformed room codes",
+  async () => {
+    const { room, guests } = await createReadinessFixture();
+    const token = guests[0].token;
+
+    const before = await request(`/rooms/${room.code}`);
+    assert.equal(before.status, 200);
+
+    for (const isReady of [undefined, null, "true", 1, {}]) {
+      const result = await updateReadiness(
+        room.code,
+        token,
+        { isReady },
+      );
+
+      assert.equal(result.status, 400);
+    }
+
+    const invalidCode = await updateReadiness(
+      "XYZ",
+      token,
+      { isReady: true },
+    );
+
+    assert.equal(invalidCode.status, 400);
+
+    const after = await request(`/rooms/${room.code}`);
+    assert.equal(after.status, 200);
+    assert.deepEqual(after.data.room, before.data.room);
+  },
+);
