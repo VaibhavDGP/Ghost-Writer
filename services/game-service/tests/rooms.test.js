@@ -5,23 +5,28 @@ import { randomBytes, randomUUID } from "node:crypto";
 const BASE_URL = "http://localhost:3001";
 
 async function request(path, { method = "GET", body } = {}) {
-  if (method === "POST" && path === "/rooms" && body !== undefined) {
-  body = {
-    sessionToken: randomBytes(32).toString("hex"),
-    ...body,
-  };
-}
-  
   if (
-  method === "POST" &&
-  path.endsWith("/join") &&
-  body !== undefined
-) {
-  body = {
-    requestId: randomUUID(),
-    ...body,
-  };
-}
+    method === "POST" &&
+    (path === "/rooms" || path.endsWith("/join")) &&
+    body !== undefined
+  ) {
+    body = {
+      sessionToken: randomBytes(32).toString("hex"),
+      ...body,
+    };
+  }
+
+  if (
+    method === "POST" &&
+    path.endsWith("/join") &&
+    body !== undefined
+  ) {
+    body = {
+      requestId: randomUUID(),
+      ...body,
+    };
+  }
+
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: body === undefined
@@ -171,14 +176,16 @@ test("simultaneous joins respect capacity and retain every accepted player",
   },
 );
 
+
 test("retrying a join returns the same player without adding another",
   async () => {
     const room = await createTestRoom();
 
     const body = {
-      displayName: "Retry Guest",
-      requestId: randomUUID(),
-    };
+  displayName: "Retry Guest",
+  requestId: randomUUID(),
+  sessionToken: randomBytes(32).toString("hex"),
+};
 
     const first = await request(`/rooms/${room.code}/join`, {
       method: "POST",
@@ -211,9 +218,10 @@ test("simultaneous retries create only one player", async () => {
   const room = await createTestRoom();
 
   const body = {
-    displayName: "Concurrent Retry Guest",
-    requestId: randomUUID(),
-  };
+  displayName: "Concurrent Retry Guest",
+  requestId: randomUUID(),
+  sessionToken: randomBytes(32).toString("hex"),
+};
 
   const results = await Promise.all(
     Array.from({ length: 10 }, () =>
@@ -242,12 +250,14 @@ test("simultaneous retries create only one player", async () => {
 test("rejects reusing a request ID with a different name", async () => {
   const room = await createTestRoom();
   const requestId = randomUUID();
+  const sessionToken = randomBytes(32).toString("hex");
 
   const first = await request(`/rooms/${room.code}/join`, {
     method: "POST",
     body: {
       displayName: "Original Guest",
       requestId,
+      sessionToken,
     },
   });
 
@@ -258,6 +268,7 @@ test("rejects reusing a request ID with a different name", async () => {
     body: {
       displayName: "Different Guest",
       requestId,
+      sessionToken,
     },
   });
 
@@ -272,6 +283,7 @@ test("rejects reusing a request ID with a different name", async () => {
     "Original Guest",
   );
 });
+
 
 test("identifies the host using their private session token", async () => {
   const sessionToken = randomBytes(32).toString("hex");
@@ -330,4 +342,186 @@ test("rejects missing and incorrect session tokens", async () => {
   );
 
   assert.equal(incorrect.status, 401);
+});
+
+test("identifies a guest and restricts their token to their room", async () => {
+  const room = await createTestRoom();
+  const sessionToken = randomBytes(32).toString("hex");
+
+  const joined = await request(`/rooms/${room.code}/join`, {
+    method: "POST",
+    body: {
+      displayName: "Session Guest",
+      sessionToken,
+    },
+  });
+
+  assert.equal(joined.status, 200);
+
+  const response = await fetch(
+    `${BASE_URL}/rooms/${room.code}/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+
+  const identity = await response.json();
+
+  assert.equal(identity.player.id, joined.data.playerId);
+  assert.equal(identity.player.displayName, "Session Guest");
+  assert.equal(identity.roomId, room.id);
+  assert.equal(identity.isHost, false);
+
+  const publicRoom = await request(`/rooms/${room.code}`);
+
+  assert.equal(publicRoom.status, 200);
+  assert.equal(
+    JSON.stringify(publicRoom.data).includes(sessionToken),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(joined.data).includes(sessionToken),
+    false,
+  );
+
+  const otherRoom = await createTestRoom();
+
+  const otherRoomResponse = await fetch(
+    `${BASE_URL}/rooms/${otherRoom.code}/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+      },
+    },
+  );
+
+  assert.equal(otherRoomResponse.status, 401);
+});
+
+test("rejects retrying someone else's join with a different token", async () => {
+  const room = await createTestRoom();
+  const requestId = randomUUID();
+  const originalToken = randomBytes(32).toString("hex");
+  const otherToken = randomBytes(32).toString("hex");
+
+  const first = await request(`/rooms/${room.code}/join`, {
+    method: "POST",
+    body: {
+      displayName: "Original Guest",
+      requestId,
+      sessionToken: originalToken,
+    },
+  });
+
+  assert.equal(first.status, 200);
+
+  const takeover = await request(`/rooms/${room.code}/join`, {
+    method: "POST",
+    body: {
+      displayName: "Original Guest",
+      requestId,
+      sessionToken: otherToken,
+    },
+  });
+
+  assert.equal(takeover.status, 409);
+
+  const unauthorized = await fetch(
+    `${BASE_URL}/rooms/${room.code}/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${otherToken}`,
+      },
+    },
+  );
+
+  assert.equal(unauthorized.status, 401);
+
+  const originalSession = await fetch(
+    `${BASE_URL}/rooms/${room.code}/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${originalToken}`,
+      },
+    },
+  );
+
+  assert.equal(originalSession.status, 200);
+
+  const identity = await originalSession.json();
+  assert.equal(identity.player.id, first.data.playerId);
+
+  const fetched = await request(`/rooms/${room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.data.room.players.length, 2);
+});
+
+test("rejects using one session for another player in the same room", async () => {
+  const room = await createTestRoom();
+  const sessionToken = randomBytes(32).toString("hex");
+
+  const first = await request(`/rooms/${room.code}/join`, {
+    method: "POST",
+    body: {
+      displayName: "First Guest",
+      requestId: randomUUID(),
+      sessionToken,
+    },
+  });
+
+  assert.equal(first.status, 200);
+
+  const second = await request(`/rooms/${room.code}/join`, {
+    method: "POST",
+    body: {
+      displayName: "Second Guest",
+      requestId: randomUUID(),
+      sessionToken,
+    },
+  });
+
+  assert.equal(second.status, 409);
+  assert.equal(
+    second.data.error,
+    "This session already belongs to a player in this room.",
+  );
+
+  const fetched = await request(`/rooms/${room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.data.room.players.length, 2);
+});
+
+test("rejects joining without a valid session token", async () => {
+  const room = await createTestRoom();
+
+  // Use fetch directly so the helper cannot supply a token.
+  for (const sessionToken of [undefined, "", "invalid", 123]) {
+    const response = await fetch(
+      `${BASE_URL}/rooms/${room.code}/join`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          displayName: "Invalid Session Guest",
+          requestId: randomUUID(),
+          sessionToken,
+        }),
+      },
+    );
+
+    assert.equal(response.status, 400);
+  }
+
+  const fetched = await request(`/rooms/${room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.data.room.players.length, 1);
 });
