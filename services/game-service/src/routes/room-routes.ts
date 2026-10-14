@@ -3,7 +3,7 @@ import {
   createRoomWithSession,
   getRoomByCode,
   getPlayerSession,
-  joinRoom,
+  joinRoomWithSession,
 } from "../services/room-service.js";
 
 import {
@@ -95,6 +95,7 @@ roomRouter.post("/:code/join", async (req, res) => {
   const code = req.params.code.trim().toUpperCase();
   const displayName: unknown = req.body?.displayName;
   const requestId: unknown = req.body?.requestId;
+  const sessionToken: unknown = req.body?.sessionToken;
 
   if (!/^[0-9A-F]{6}$/.test(code)) {
     res.status(400).json({
@@ -127,11 +128,19 @@ roomRouter.post("/:code/join", async (req, res) => {
     return;
   }
 
+  if (!isSessionToken(sessionToken)) {
+    res.status(400).json({
+      error: "sessionToken must contain 64 lowercase hexadecimal characters.",
+    });
+    return;
+  }
+
   try {
-    const result = await joinRoom(
+    const result = await joinRoomWithSession(
       code,
       displayName.trim(),
       requestId.toLowerCase(),
+      sessionToken,
     );
 
     switch (result.outcome) {
@@ -155,7 +164,13 @@ roomRouter.post("/:code/join", async (req, res) => {
 
       case "REQUEST_CONFLICT":
         res.status(409).json({
-          error: "requestId was already used with a different displayName.",
+          error: "Retry the join with the original name and session token.",
+        });
+        return;
+
+      case "SESSION_IN_USE":
+        res.status(409).json({
+          error: "This session already belongs to a player in this room.",
         });
         return;
 
