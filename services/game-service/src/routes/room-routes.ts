@@ -4,6 +4,7 @@ import {
   getRoomByCode,
   getPlayerSession,
   startRoom,
+  leaveRoom,
   setPlayerReady,
   joinRoomWithSession,
 } from "../services/room-service.js";
@@ -397,6 +398,70 @@ roomRouter.post("/:code/start", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to start room.",
+    });
+  }
+});
+
+// DELETE /rooms/:code/players/me
+roomRouter.delete("/:code/players/me", async (req, res) => {
+  const code = req.params.code.trim().toUpperCase();
+
+  if (!/^[0-9A-F]{6}$/.test(code)) {
+    res.status(400).json({
+      error: "Room code must contain 6 hexadecimal characters.",
+    });
+    return;
+  }
+
+  const sessionToken = readBearerToken(
+    req.get("Authorization"),
+  );
+
+  if (sessionToken === null) {
+    res.set("WWW-Authenticate", "Bearer");
+    res.status(401).json({
+      error: "A valid session token is required.",
+    });
+    return;
+  }
+
+  try {
+    const result = await leaveRoom(code, sessionToken);
+
+    switch (result.outcome) {
+      case "NOT_FOUND":
+        res.status(404).json({
+          error: "Room not found or expired.",
+        });
+        return;
+
+      case "UNAUTHORIZED":
+        res.set("WWW-Authenticate", "Bearer");
+        res.status(401).json({
+          error: "Invalid or expired player session.",
+        });
+        return;
+
+      case "ROOM_CLOSED":
+        res.status(200).json({
+          outcome: "ROOM_CLOSED",
+          playerId: result.playerId,
+        });
+        return;
+
+      case "LEFT":
+        res.status(200).json({
+          outcome: "LEFT",
+          room: result.room,
+          playerId: result.playerId,
+        });
+        return;
+    }
+  } catch (error) {
+    console.error("Failed to leave room:", error);
+
+    res.status(500).json({
+      error: "Failed to leave room.",
     });
   }
 });

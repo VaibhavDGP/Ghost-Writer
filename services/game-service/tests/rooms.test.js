@@ -1053,3 +1053,117 @@ test("a simultaneous unready request and start leave a consistent room",
     }
   },
 );
+
+async function leaveRoomRequest(code, token) {
+  const headers = {};
+
+  if (token !== undefined) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `${BASE_URL}/rooms/${code}/players/me`,
+    {
+      method: "DELETE",
+      headers,
+    },
+  );
+
+  return {
+    status: response.status,
+    data: await response.json(),
+  };
+}
+
+test("a guest leaves the room and frees their player slot", async () => {
+  const fixture = await createReadinessFixture();
+  const guest = fixture.guests[0];
+
+  const result = await leaveRoomRequest(
+    fixture.room.code,
+    guest.token,
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.data.outcome, "LEFT");
+  assert.equal(result.data.playerId, guest.playerId);
+  assert.equal(
+    result.data.room.players.some(
+      (player) => player.id === guest.playerId,
+    ),
+    false,
+  );
+
+  const identity = await fetch(
+    `${BASE_URL}/rooms/${fixture.room.code}/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${guest.token}`,
+      },
+    },
+  );
+
+  assert.equal(identity.status, 401);
+
+  const fetched = await request(`/rooms/${fixture.room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(
+    fetched.data.room.players.some(
+      (player) => player.id === guest.playerId,
+    ),
+    false,
+  );
+});
+
+test("the host leaving closes the room", async () => {
+  const hostToken = randomBytes(32).toString("hex");
+  const created = await request("/rooms", {
+    method: "POST",
+    body: {
+      displayName: "Leaving Host",
+      sessionToken: hostToken,
+    },
+  });
+
+  assert.equal(created.status, 201);
+
+  const result = await leaveRoomRequest(
+    created.data.room.code,
+    hostToken,
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.data.outcome, "ROOM_CLOSED");
+
+  const fetched = await request(
+    `/rooms/${created.data.room.code}`,
+  );
+
+  assert.equal(fetched.status, 404);
+});
+
+test("rejects leaving without a valid room session", async () => {
+  const fixture = await createReadinessFixture();
+
+  for (const token of [
+    undefined,
+    "invalid",
+    randomBytes(32).toString("hex"),
+  ]) {
+    const result = await leaveRoomRequest(
+      fixture.room.code,
+      token,
+    );
+
+    assert.equal(result.status, 401);
+  }
+
+  const fetched = await request(`/rooms/${fixture.room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(
+    fetched.data.room.players.length,
+    fixture.room.players.length + fixture.guests.length,
+  );
+});

@@ -535,3 +535,77 @@ export async function startRoomInStore(
 
   return JSON.parse(result) as StartRoomResult;
 }
+
+export type LeaveRoomResult =
+  | { outcome: "LEFT"; room: Room; playerId: string }
+  | { outcome: "ROOM_CLOSED"; playerId: string }
+  | { outcome: "NOT_FOUND" }
+  | { outcome: "UNAUTHORIZED" };
+
+const LEAVE_ROOM_SCRIPT = `
+  local data = redis.call("GET", KEYS[1])
+
+  if not data then
+    return cjson.encode({ outcome = "NOT_FOUND" })
+  end
+
+  local playerId = redis.call("HGET", KEYS[2], ARGV[1])
+
+  if not playerId then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  local room = cjson.decode(data)
+  local playerIndex = nil
+
+  for index, player in ipairs(room.players) do
+    if player.id == playerId then
+      playerIndex = index
+      break
+    end
+  end
+
+  if not playerIndex then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  if room.hostPlayerId == playerId then
+    redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
+
+    return cjson.encode({
+      outcome = "ROOM_CLOSED",
+      playerId = playerId
+    })
+  end
+
+  table.remove(room.players, playerIndex)
+
+  redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
+  redis.call("HDEL", KEYS[2], ARGV[1])
+
+  return cjson.encode({
+    outcome = "LEFT",
+    room = room,
+    playerId = playerId
+  })
+`;
+
+export async function leaveRoomInStore(
+  code: string,
+  tokenHash: string,
+): Promise<LeaveRoomResult> {
+  const result = await redis.eval(LEAVE_ROOM_SCRIPT, {
+    keys: [
+      roomKey(code),
+      sessionsKey(code),
+      joinRequestsKey(code),
+    ],
+    arguments: [tokenHash],
+  });
+
+  if (typeof result !== "string") {
+    throw new Error("Unexpected Redis leave-room response.");
+  }
+
+  return JSON.parse(result) as LeaveRoomResult;
+}

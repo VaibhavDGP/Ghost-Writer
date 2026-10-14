@@ -5,6 +5,7 @@ import {
   saveNewRoom,
   addPlayerToRoom,
   startRoomInStore,
+  leaveRoomInStore,
   setPlayerReadyInRoom,
   saveNewRoomWithSession,
   findPlayerSession,
@@ -14,6 +15,7 @@ import {
 import type {
   JoinRoomResult,
   StartRoomResult,
+  LeaveRoomResult,
   PlayerSessionResult,
   SetPlayerReadyResult,
   JoinRoomWithSessionResult,
@@ -186,6 +188,20 @@ export async function startRoom(
   }
 
   return startRoomInStore(
+    code,
+    hashSessionToken(sessionToken),
+  );
+}
+
+export async function leaveRoom(
+  code: string,
+  sessionToken: string,
+): Promise<LeaveRoomResult> {
+  if (!isSessionToken(sessionToken)) {
+    return { outcome: "UNAUTHORIZED" };
+  }
+
+  return leaveRoomInStore(
     code,
     hashSessionToken(sessionToken),
   );
