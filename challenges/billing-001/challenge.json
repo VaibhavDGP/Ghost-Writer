@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "billing-001",
+  "title": "Billing Rules Under Pressure",
+  "language": "cpp",
+  "entrypoint": "main.cpp",
+  "difficulty": "beginner",
+  "minPlayers": 2,
+  "maxPlayers": 8,
+  "durationSeconds": 600,
+  "objectives": [
+    {
+      "id": "discount-boundaries",
+      "description": "Apply the correct discount at each subtotal boundary.",
+      "required": true,
+      "editableRegionIds": ["discount-rules"],
+      "publicTests": "tests/public/cases.json",
+      "hiddenTests": "tests/hidden/cases.json"
+    },
+    {
+      "id": "free-shipping-boundary",
+      "description": "Apply free shipping at and above the required subtotal.",
+      "required": true,
+      "editableRegionIds": ["shipping-rules"],
+      "publicTests": "tests/public/cases.json",
+      "hiddenTests": "tests/hidden/cases.json"
+    }
+  ],
+  "editableRegions": [
+    {
+      "id": "discount-rules",
+      "file": "main.cpp",
+      "symbol": "calculateDiscountPercent",
+      "objectiveId": "discount-boundaries"
+    },
+    {
+      "id": "shipping-rules",
+      "file": "main.cpp",
+      "symbol": "calculateShippingCost",
+      "objectiveId": "free-shipping-boundary"
+    }
+  ],
+  "verification": {
+    "publicTests": "tests/public/cases.json",
+    "hiddenTests": "tests/hidden/cases.json",
+    "referenceProject": "reference"
+  },
+  "sabotagePolicy": {
+    "approvedMutations": "sabotage/approved-mutations.json",
+    "maximumNewFailingObjectivesPerAction": 1,
+    "tokensPerMatch": 3
+  }
+}

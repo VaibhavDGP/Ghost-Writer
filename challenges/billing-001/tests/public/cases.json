@@ -1,0 +1,23 @@
+[
+  {
+    "id": "below-first-discount",
+    "input": "499",
+    "expectedOutput": "0 50 39 588",
+    "objectives": ["discount-boundaries"],
+    "starterExpected": "PASS"
+  },
+  {
+    "id": "first-discount-boundary",
+    "input": "500",
+    "expectedOutput": "10 50 36 536",
+    "objectives": ["discount-boundaries"],
+    "starterExpected": "FAIL"
+  },
+  {
+    "id": "free-shipping-boundary",
+    "input": "800",
+    "expectedOutput": "10 0 57 777",
+    "objectives": ["free-shipping-boundary"],
+    "starterExpected": "FAIL"
+  }
+]

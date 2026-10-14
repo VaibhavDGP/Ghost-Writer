@@ -1,0 +1,26 @@
+[
+  {
+    "id": "regress-discount-boundary",
+    "regionId": "discount-rules",
+    "objectiveId": "discount-boundaries",
+    "type": "exact-source-replacement",
+    "from": "if (subtotal >= 500) {",
+    "to": "if (subtotal > 500) {",
+    "tokenCost": {
+      "newBug": 1,
+      "previouslyVerifiedRegression": 2
+    }
+  },
+  {
+    "id": "regress-shipping-boundary",
+    "regionId": "shipping-rules",
+    "objectiveId": "free-shipping-boundary",
+    "type": "exact-source-replacement",
+    "from": "if (subtotal >= 800) {",
+    "to": "if (subtotal > 800) {",
+    "tokenCost": {
+      "newBug": 1,
+      "previouslyVerifiedRegression": 2
+    }
+  }
+]

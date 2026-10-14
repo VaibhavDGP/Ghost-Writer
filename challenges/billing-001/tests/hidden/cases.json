@@ -1,0 +1,30 @@
+[
+  {
+    "id": "zero-subtotal",
+    "input": "0",
+    "expectedOutput": "0 50 0 50",
+    "objectives": ["discount-boundaries", "free-shipping-boundary"],
+    "starterExpected": "PASS"
+  },
+  {
+    "id": "just-below-free-shipping",
+    "input": "799",
+    "expectedOutput": "10 50 57 827",
+    "objectives": ["free-shipping-boundary"],
+    "starterExpected": "PASS"
+  },
+  {
+    "id": "second-discount-boundary",
+    "input": "1000",
+    "expectedOutput": "20 0 64 864",
+    "objectives": ["discount-boundaries"],
+    "starterExpected": "FAIL"
+  },
+  {
+    "id": "above-both-boundaries",
+    "input": "1500",
+    "expectedOutput": "20 0 96 1296",
+    "objectives": ["discount-boundaries", "free-shipping-boundary"],
+    "starterExpected": "PASS"
+  }
+]
