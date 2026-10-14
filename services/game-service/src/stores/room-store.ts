@@ -431,3 +431,107 @@ export async function setPlayerReadyInRoom(
 
   return JSON.parse(result) as SetPlayerReadyResult;
 }
+
+export type StartRoomResult =
+  | {
+      outcome: "STARTED";
+      room: Room;
+    }
+  | { outcome: "NOT_FOUND" }
+  | { outcome: "UNAUTHORIZED" }
+  | { outcome: "FORBIDDEN" }
+  | { outcome: "NOT_IN_LOBBY" }
+  | { outcome: "NOT_ENOUGH_PLAYERS" }
+  | { outcome: "PLAYERS_NOT_READY" };
+
+const MIN_PLAYERS_TO_START = 2;
+
+const START_ROOM_SCRIPT = `
+  local data = redis.call("GET", KEYS[1])
+
+  if not data then
+    return cjson.encode({ outcome = "NOT_FOUND" })
+  end
+
+  local playerId = redis.call("HGET", KEYS[2], ARGV[1])
+
+  if not playerId then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  local room = cjson.decode(data)
+  local isMember = false
+
+  for _, player in ipairs(room.players) do
+    if player.id == playerId then
+      isMember = true
+      break
+    end
+  end
+
+  if not isMember then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  if room.hostPlayerId ~= playerId then
+    return cjson.encode({ outcome = "FORBIDDEN" })
+  end
+
+  -- A retry from the host must not restart the game.
+  if room.phase == "IN_PROGRESS" then
+    return cjson.encode({
+      outcome = "STARTED",
+      room = room
+    })
+  end
+
+  if room.phase ~= "LOBBY" then
+    return cjson.encode({ outcome = "NOT_IN_LOBBY" })
+  end
+
+  local minimumPlayers = tonumber(ARGV[2])
+
+  if #room.players < minimumPlayers then
+    return cjson.encode({ outcome = "NOT_ENOUGH_PLAYERS" })
+  end
+
+  for _, player in ipairs(room.players) do
+    if player.id ~= room.hostPlayerId and player.isReady ~= true then
+      return cjson.encode({ outcome = "PLAYERS_NOT_READY" })
+    end
+  end
+
+  room.phase = "IN_PROGRESS"
+
+  redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
+
+  return cjson.encode({
+    outcome = "STARTED",
+    room = room
+  })
+`;
+
+export async function startRoomInStore(
+  code: string,
+  tokenHash: string,
+): Promise<StartRoomResult> {
+  const result = await redis.eval(
+    START_ROOM_SCRIPT,
+    {
+      keys: [
+        roomKey(code),
+        sessionsKey(code),
+      ],
+      arguments: [
+        tokenHash,
+        String(MIN_PLAYERS_TO_START),
+      ],
+    },
+  );
+
+  if (typeof result !== "string") {
+    throw new Error("Unexpected Redis start-room response.");
+  }
+
+  return JSON.parse(result) as StartRoomResult;
+}
