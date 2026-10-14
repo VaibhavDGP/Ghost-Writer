@@ -4,6 +4,7 @@ import {
   findRoomByCode,
   saveNewRoom,
   addPlayerToRoom,
+  setPlayerReadyInRoom,
   saveNewRoomWithSession,
   findPlayerSession,
   addPlayerToRoomWithSession,
@@ -12,6 +13,7 @@ import {
 import type {
   JoinRoomResult,
   PlayerSessionResult,
+  SetPlayerReadyResult,
   JoinRoomWithSessionResult,
 } from "../stores/room-store.js";
 
@@ -154,5 +156,21 @@ export async function joinRoomWithSession(
     player,
     requestId,
     hashSessionToken(sessionToken),
+  );
+}
+
+export async function setPlayerReady(
+  code: string,
+  sessionToken: string,
+  isReady: boolean,
+): Promise<SetPlayerReadyResult> {
+  if (!isSessionToken(sessionToken)) {
+    return { outcome: "UNAUTHORIZED" };
+  }
+
+  return setPlayerReadyInRoom(
+    code,
+    hashSessionToken(sessionToken),
+    isReady,
   );
 }
