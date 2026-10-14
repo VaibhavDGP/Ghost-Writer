@@ -348,3 +348,86 @@ export async function addPlayerToRoomWithSession(
 
   return JSON.parse(result) as JoinRoomWithSessionResult;
 }
+
+export type SetPlayerReadyResult =
+  | {
+      outcome: "UPDATED";
+      room: Room;
+      playerId: string;
+    }
+  | { outcome: "NOT_FOUND" }
+  | { outcome: "UNAUTHORIZED" }
+  | { outcome: "NOT_IN_LOBBY" }
+  | { outcome: "HOST_CANNOT_READY" };
+
+const SET_PLAYER_READY_SCRIPT = `
+  local data = redis.call("GET", KEYS[1])
+
+  if not data then
+    return cjson.encode({ outcome = "NOT_FOUND" })
+  end
+
+  local playerId = redis.call("HGET", KEYS[2], ARGV[1])
+
+  if not playerId then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  local room = cjson.decode(data)
+  local targetPlayer = nil
+
+  for _, player in ipairs(room.players) do
+    if player.id == playerId then
+      targetPlayer = player
+      break
+    end
+  end
+
+  if not targetPlayer then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  if room.phase ~= "LOBBY" then
+    return cjson.encode({ outcome = "NOT_IN_LOBBY" })
+  end
+
+  if room.hostPlayerId == playerId then
+    return cjson.encode({ outcome = "HOST_CANNOT_READY" })
+  end
+
+  targetPlayer.isReady = ARGV[2] == "true"
+
+  redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
+
+  return cjson.encode({
+    outcome = "UPDATED",
+    room = room,
+    playerId = playerId
+  })
+`;
+
+export async function setPlayerReadyInRoom(
+  code: string,
+  tokenHash: string,
+  isReady: boolean,
+): Promise<SetPlayerReadyResult> {
+  const result = await redis.eval(
+    SET_PLAYER_READY_SCRIPT,
+    {
+      keys: [
+        roomKey(code),
+        sessionsKey(code),
+      ],
+      arguments: [
+        tokenHash,
+        String(isReady),
+      ],
+    },
+  );
+
+  if (typeof result !== "string") {
+    throw new Error("Unexpected Redis readiness response.");
+  }
+
+  return JSON.parse(result) as SetPlayerReadyResult;
+}
