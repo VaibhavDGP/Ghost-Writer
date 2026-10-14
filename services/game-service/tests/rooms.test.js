@@ -1,10 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 const BASE_URL = "http://localhost:3001";
 
 async function request(path, { method = "GET", body } = {}) {
+  if (method === "POST" && path === "/rooms" && body !== undefined) {
+  body = {
+    sessionToken: randomBytes(32).toString("hex"),
+    ...body,
+  };
+}
+  
   if (
   method === "POST" &&
   path.endsWith("/join") &&
@@ -264,4 +271,63 @@ test("rejects reusing a request ID with a different name", async () => {
     fetched.data.room.players[1].displayName,
     "Original Guest",
   );
+});
+
+test("identifies the host using their private session token", async () => {
+  const sessionToken = randomBytes(32).toString("hex");
+
+  const created = await request("/rooms", {
+    method: "POST",
+    body: {
+      displayName: "Session Host",
+      sessionToken,
+    },
+  });
+
+  assert.equal(created.status, 201);
+
+  const room = created.data.room;
+
+  const response = await fetch(
+    `${BASE_URL}/rooms/${room.code}/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+
+  const identity = await response.json();
+
+  assert.equal(identity.roomId, room.id);
+  assert.equal(identity.player.id, room.hostPlayerId);
+  assert.equal(identity.isHost, true);
+
+  const publicRoom = await request(`/rooms/${room.code}`);
+
+  assert.equal(publicRoom.status, 200);
+  assert.deepEqual(publicRoom.data.room, room);
+  assert.equal(JSON.stringify(created.data).includes(sessionToken), false);
+  assert.equal(JSON.stringify(publicRoom.data).includes(sessionToken), false);
+});
+
+test("rejects missing and incorrect session tokens", async () => {
+  const room = await createTestRoom();
+
+  const missing = await request(`/rooms/${room.code}/me`);
+
+  assert.equal(missing.status, 401);
+
+  const incorrect = await fetch(
+    `${BASE_URL}/rooms/${room.code}/me`,
+    {
+      headers: {
+        Authorization: `Bearer ${randomBytes(32).toString("hex")}`,
+      },
+    },
+  );
+
+  assert.equal(incorrect.status, 401);
 });
