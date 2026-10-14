@@ -757,3 +757,299 @@ test("rejects invalid readiness values and malformed room codes",
     assert.deepEqual(after.data.room, before.data.room);
   },
 );
+
+async function startGameRequest(code, token, body = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  if (token !== undefined) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `${BASE_URL}/rooms/${code}/start`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    },
+  );
+
+  return {
+    status: response.status,
+    data: await response.json(),
+  };
+}
+
+async function readyAllGuests(fixture) {
+  for (const guest of fixture.guests) {
+    const result = await updateReadiness(
+      fixture.room.code,
+      guest.token,
+      { isReady: true },
+    );
+
+    assert.equal(result.status, 200);
+  }
+}
+
+test("the host starts a room when every guest is ready", async () => {
+  const fixture = await createReadinessFixture();
+
+  await readyAllGuests(fixture);
+
+  const started = await startGameRequest(
+    fixture.room.code,
+    fixture.hostToken,
+  );
+
+  assert.equal(started.status, 200);
+  assert.equal(started.data.room.phase, "IN_PROGRESS");
+  assert.equal(started.data.room.id, fixture.room.id);
+  assert.equal(
+    started.data.room.hostPlayerId,
+    fixture.room.hostPlayerId,
+  );
+
+  const fetched = await request(`/rooms/${fixture.room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.deepEqual(fetched.data.room, started.data.room);
+});
+
+test("rejects start requests without the host's session", async () => {
+  const fixture = await createReadinessFixture();
+
+  await readyAllGuests(fixture);
+
+  const otherHostToken = randomBytes(32).toString("hex");
+
+  const otherRoom = await request("/rooms", {
+    method: "POST",
+    body: {
+      displayName: "Other Host",
+      sessionToken: otherHostToken,
+    },
+  });
+
+  assert.equal(otherRoom.status, 201);
+
+  for (const token of [
+    undefined,
+    "invalid",
+    randomBytes(32).toString("hex"),
+    otherHostToken,
+  ]) {
+    const result = await startGameRequest(
+      fixture.room.code,
+      token,
+    );
+
+    assert.equal(result.status, 401);
+  }
+
+  // A guest cannot become the host by supplying the host's ID.
+  const guestAttempt = await startGameRequest(
+    fixture.room.code,
+    fixture.guests[0].token,
+    { playerId: fixture.room.hostPlayerId },
+  );
+
+  assert.equal(guestAttempt.status, 403);
+
+  const fetched = await request(`/rooms/${fixture.room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.data.room.phase, "LOBBY");
+});
+
+test("rejects starting a room containing only the host", async () => {
+  const hostToken = randomBytes(32).toString("hex");
+
+  const created = await request("/rooms", {
+    method: "POST",
+    body: {
+      displayName: "Solo Host",
+      sessionToken: hostToken,
+    },
+  });
+
+  assert.equal(created.status, 201);
+
+  const result = await startGameRequest(
+    created.data.room.code,
+    hostToken,
+  );
+
+  assert.equal(result.status, 409);
+  assert.equal(
+    result.data.error,
+    "At least two players are required to start.",
+  );
+});
+
+test("rejects starting while any guest is not ready", async () => {
+  const fixture = await createReadinessFixture();
+
+  // Missing isReady is treated as not ready.
+  const initial = await startGameRequest(
+    fixture.room.code,
+    fixture.hostToken,
+  );
+
+  assert.equal(initial.status, 409);
+  assert.equal(
+    initial.data.error,
+    "Every guest must be ready before starting.",
+  );
+
+  const firstReady = await updateReadiness(
+    fixture.room.code,
+    fixture.guests[0].token,
+    { isReady: true },
+  );
+
+  assert.equal(firstReady.status, 200);
+
+  const onlyOneReady = await startGameRequest(
+    fixture.room.code,
+    fixture.hostToken,
+  );
+
+  assert.equal(onlyOneReady.status, 409);
+
+  await readyAllGuests(fixture);
+
+  const becameUnready = await updateReadiness(
+    fixture.room.code,
+    fixture.guests[1].token,
+    { isReady: false },
+  );
+
+  assert.equal(becameUnready.status, 200);
+
+  const finalAttempt = await startGameRequest(
+    fixture.room.code,
+    fixture.hostToken,
+  );
+
+  assert.equal(finalAttempt.status, 409);
+
+  const fetched = await request(`/rooms/${fixture.room.code}`);
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.data.room.phase, "LOBBY");
+});
+
+test("simultaneous start requests safely return the same started room",
+  async () => {
+    const fixture = await createReadinessFixture();
+
+    await readyAllGuests(fixture);
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        startGameRequest(
+          fixture.room.code,
+          fixture.hostToken,
+        ),
+      ),
+    );
+
+    for (const result of results) {
+      assert.equal(result.status, 200);
+      assert.equal(result.data.room.phase, "IN_PROGRESS");
+      assert.deepEqual(result.data.room, results[0].data.room);
+    }
+
+    const fetched = await request(`/rooms/${fixture.room.code}`);
+
+    assert.equal(fetched.status, 200);
+    assert.deepEqual(fetched.data.room, results[0].data.room);
+  },
+);
+
+test("blocks joining and readiness changes after the game starts",
+  async () => {
+    const fixture = await createReadinessFixture();
+
+    await readyAllGuests(fixture);
+
+    const started = await startGameRequest(
+      fixture.room.code,
+      fixture.hostToken,
+    );
+
+    assert.equal(started.status, 200);
+
+    const lateJoin = await request(
+      `/rooms/${fixture.room.code}/join`,
+      {
+        method: "POST",
+        body: {
+          displayName: "Late Guest",
+        },
+      },
+    );
+
+    assert.equal(lateJoin.status, 409);
+
+    const readinessChange = await updateReadiness(
+      fixture.room.code,
+      fixture.guests[0].token,
+      { isReady: false },
+    );
+
+    assert.equal(readinessChange.status, 409);
+
+    const fetched = await request(`/rooms/${fixture.room.code}`);
+
+    assert.equal(fetched.status, 200);
+    assert.deepEqual(fetched.data.room, started.data.room);
+  },
+);
+
+test("a simultaneous unready request and start leave a consistent room",
+  async () => {
+    const fixture = await createReadinessFixture();
+
+    await readyAllGuests(fixture);
+
+    const [startResult, unreadyResult] = await Promise.all([
+      startGameRequest(
+        fixture.room.code,
+        fixture.hostToken,
+      ),
+      updateReadiness(
+        fixture.room.code,
+        fixture.guests[0].token,
+        { isReady: false },
+      ),
+    ]);
+
+    const fetched = await request(`/rooms/${fixture.room.code}`);
+
+    assert.equal(fetched.status, 200);
+
+    const room = fetched.data.room;
+    const guest = room.players.find(
+      (player) => player.id === fixture.guests[0].playerId,
+    );
+
+    assert.ok(guest);
+
+    if (startResult.status === 200) {
+      // Start happened first, so readiness changes were blocked.
+      assert.equal(unreadyResult.status, 409);
+      assert.equal(room.phase, "IN_PROGRESS");
+      assert.equal(guest.isReady, true);
+    } else {
+      // Unready happened first, so starting was blocked.
+      assert.equal(startResult.status, 409);
+      assert.equal(unreadyResult.status, 200);
+      assert.equal(room.phase, "LOBBY");
+      assert.equal(guest.isReady, false);
+    }
+  },
+);
