@@ -239,3 +239,112 @@ export async function findPlayerSession(
 
   return JSON.parse(result) as PlayerSessionResult;
 }
+
+export type JoinRoomWithSessionResult =
+  | JoinRoomResult
+  | { outcome: "SESSION_IN_USE" };
+
+const JOIN_ROOM_WITH_SESSION_SCRIPT = `
+  local data = redis.call("GET", KEYS[1])
+
+  if not data then
+    return cjson.encode({ outcome = "NOT_FOUND" })
+  end
+
+  local room = cjson.decode(data)
+  local player = cjson.decode(ARGV[1])
+  local requestId = ARGV[2]
+  local tokenHash = ARGV[3]
+
+  local previousData = redis.call("HGET", KEYS[2], requestId)
+
+  if previousData then
+    local previous = cjson.decode(previousData)
+
+    if previous.displayName ~= player.displayName
+      or previous.tokenHash ~= tokenHash then
+      return cjson.encode({ outcome = "REQUEST_CONFLICT" })
+    end
+
+    local existingPlayerId = redis.call("HGET", KEYS[3], tokenHash)
+
+    if existingPlayerId ~= previous.playerId then
+      return cjson.encode({ outcome = "REQUEST_CONFLICT" })
+    end
+
+    return cjson.encode({
+      outcome = "JOINED",
+      room = room,
+      playerId = previous.playerId
+    })
+  end
+
+  if redis.call("HEXISTS", KEYS[3], tokenHash) == 1 then
+    return cjson.encode({ outcome = "SESSION_IN_USE" })
+  end
+
+  if room.phase ~= "LOBBY" then
+    return cjson.encode({ outcome = "NOT_IN_LOBBY" })
+  end
+
+  if #room.players >= room.maxPlayers then
+    return cjson.encode({ outcome = "FULL" })
+  end
+
+  table.insert(room.players, player)
+
+  redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
+
+  redis.call("HSET", KEYS[2], requestId, cjson.encode({
+    playerId = player.id,
+    displayName = player.displayName,
+    tokenHash = tokenHash
+  }))
+
+  redis.call("HSET", KEYS[3], tokenHash, player.id)
+
+  local ttl = redis.call("PTTL", KEYS[1])
+
+  if ttl >= 0 then
+    redis.call("PEXPIRE", KEYS[2], ttl)
+    redis.call("PEXPIRE", KEYS[3], ttl)
+  else
+    redis.call("PERSIST", KEYS[2])
+    redis.call("PERSIST", KEYS[3])
+  end
+
+  return cjson.encode({
+    outcome = "JOINED",
+    room = room,
+    playerId = player.id
+  })
+`;
+
+export async function addPlayerToRoomWithSession(
+  code: string,
+  player: Player,
+  requestId: string,
+  tokenHash: string,
+): Promise<JoinRoomWithSessionResult> {
+  const result = await redis.eval(
+    JOIN_ROOM_WITH_SESSION_SCRIPT,
+    {
+      keys: [
+        roomKey(code),
+        joinRequestsKey(code),
+        sessionsKey(code),
+      ],
+      arguments: [
+        JSON.stringify(player),
+        requestId,
+        tokenHash,
+      ],
+    },
+  );
+
+  if (typeof result !== "string") {
+    throw new Error("Unexpected Redis session join response.");
+  }
+
+  return JSON.parse(result) as JoinRoomWithSessionResult;
+}

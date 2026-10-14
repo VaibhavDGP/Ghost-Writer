@@ -6,11 +6,13 @@ import {
   addPlayerToRoom,
   saveNewRoomWithSession,
   findPlayerSession,
+  addPlayerToRoomWithSession,
 } from "../stores/room-store.js";
 
 import type {
   JoinRoomResult,
   PlayerSessionResult,
+  JoinRoomWithSessionResult,
 } from "../stores/room-store.js";
 
 import {
@@ -127,6 +129,30 @@ export async function getPlayerSession(
 
   return findPlayerSession(
     code,
+    hashSessionToken(sessionToken),
+  );
+}
+
+export async function joinRoomWithSession(
+  code: string,
+  displayName: string,
+  requestId: string,
+  sessionToken: string,
+): Promise<JoinRoomWithSessionResult> {
+  if (!isSessionToken(sessionToken)) {
+    throw new Error("Invalid session token format.");
+  }
+
+  const player: Player = {
+    id: randomUUID(),
+    displayName,
+    joinedAt: new Date().toISOString(),
+  };
+
+  return addPlayerToRoomWithSession(
+    code,
+    player,
+    requestId,
     hashSessionToken(sessionToken),
   );
 }
