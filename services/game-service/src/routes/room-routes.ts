@@ -3,6 +3,7 @@ import {
   createRoomWithSession,
   getRoomByCode,
   getPlayerSession,
+  setPlayerReady,
   joinRoomWithSession,
 } from "../services/room-service.js";
 
@@ -236,6 +237,86 @@ roomRouter.get("/:code/me", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to look up player session.",
+    });
+  }
+});
+
+// PATCH /rooms/:code/ready
+roomRouter.patch("/:code/ready", async (req, res) => {
+  const code = req.params.code.trim().toUpperCase();
+  const isReady: unknown = req.body?.isReady;
+
+  if (!/^[0-9A-F]{6}$/.test(code)) {
+    res.status(400).json({
+      error: "Room code must contain 6 hexadecimal characters.",
+    });
+    return;
+  }
+
+  const sessionToken = readBearerToken(
+    req.get("Authorization"),
+  );
+
+  if (sessionToken === null) {
+    res.set("WWW-Authenticate", "Bearer");
+    res.status(401).json({
+      error: "A valid session token is required.",
+    });
+    return;
+  }
+
+  if (typeof isReady !== "boolean") {
+    res.status(400).json({
+      error: "isReady must be true or false.",
+    });
+    return;
+  }
+
+  try {
+    const result = await setPlayerReady(
+      code,
+      sessionToken,
+      isReady,
+    );
+
+    switch (result.outcome) {
+      case "NOT_FOUND":
+        res.status(404).json({
+          error: "Room not found or expired.",
+        });
+        return;
+
+      case "UNAUTHORIZED":
+        res.set("WWW-Authenticate", "Bearer");
+        res.status(401).json({
+          error: "Invalid or expired player session.",
+        });
+        return;
+
+      case "NOT_IN_LOBBY":
+        res.status(409).json({
+          error: "Readiness can only be changed in the lobby.",
+        });
+        return;
+
+      case "HOST_CANNOT_READY":
+        res.status(403).json({
+          error: "The host starts the game instead of marking ready.",
+        });
+        return;
+
+      case "UPDATED":
+        res.status(200).json({
+          room: result.room,
+          playerId: result.playerId,
+        });
+        return;
+    }
+  } catch (error) {
+    console.error("Failed to update player readiness:", error);
+
+    res.status(500).json({
+      error: "Failed to update player readiness.",
     });
   }
 });
