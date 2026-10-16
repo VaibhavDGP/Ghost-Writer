@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "numeric-001",
+  "version": "1.0.0",
+  "title": "Numeric Utilities",
+  "language": "cpp",
+  "difficulty": "beginner",
+  "players": {
+    "min": 2,
+    "max": 8
+  },
+  "durationSeconds": 1800,
+  "functions": [
+    {
+      "id": "clamp-value",
+      "name": "clampValue",
+      "description": "Return a value limited to a minimum and maximum.",
+      "starterFile": "functions/starter/clamp-value.cpp",
+      "referenceFile": "functions/reference/clamp-value.cpp"
+    },
+    {
+      "id": "sum-digits",
+      "name": "sumDigits",
+      "description": "Return the sum of the digits in a non-negative integer.",
+      "starterFile": "functions/starter/sum-digits.cpp",
+      "referenceFile": "functions/reference/sum-digits.cpp"
+    },
+    {
+      "id": "count-digits",
+      "name": "countDigits",
+      "description": "Return the number of digits in a non-negative integer.",
+      "starterFile": "functions/starter/count-digits.cpp",
+      "referenceFile": "functions/reference/count-digits.cpp"
+    }
+  ],
+  "objectives": [
+    {
+      "id": "clamp-boundaries",
+      "description": "Clamp values below, within, and above the supplied range.",
+      "functionIds": ["clamp-value"],
+      "required": true
+    },
+    {
+      "id": "digit-sum",
+      "description": "Calculate the sum of every digit, including for zero.",
+      "functionIds": ["sum-digits"],
+      "required": true
+    },
+    {
+      "id": "digit-count",
+      "description": "Count the digits in a non-negative integer; zero has one digit.",
+      "functionIds": ["count-digits"],
+      "required": true
+    }
+  ],
+  "tests": {
+    "publicFile": "tests/public/cases.json",
+    "hiddenFile": "tests/hidden/cases.json"
+  },
+  "sabotage": {
+    "mutationsFile": "sabotage/approved-mutations.json",
+    "tokensPerMatch": 3
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ghost Writer challenge template",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "version",
+    "title",
+    "language",
+    "difficulty",
+    "players",
+    "durationSeconds",
+    "functions",
+    "objectives",
+    "tests",
+    "sabotage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "language": {
+      "const": "cpp"
+    },
+    "difficulty": {
+      "enum": ["beginner", "intermediate", "advanced"]
+    },
+    "players": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "properties": {
+        "min": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 64
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 64
+        }
+      }
+    },
+    "durationSeconds": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 7200
+    },
+    "functions": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "starterFile",
+          "referenceFile"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "starterFile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "referenceFile": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "objectives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description", "functionIds", "required"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "functionIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publicFile", "hiddenFile"],
+      "properties": {
+        "publicFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hiddenFile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "sabotage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mutationsFile", "tokensPerMatch"],
+      "properties": {
+        "mutationsFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tokensPerMatch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    }
+  }
+}
