@@ -1,0 +1,23 @@
+[
+  {
+    "id": "clamp-within-range",
+    "input": "clamp 5 0 10",
+    "expectedOutput": "5",
+    "objectives": ["clamp-boundaries"],
+    "starterExpected": "PASS"
+  },
+  {
+    "id": "sum-ordinary-number",
+    "input": "sum 123",
+    "expectedOutput": "6",
+    "objectives": ["digit-sum"],
+    "starterExpected": "PASS"
+  },
+  {
+    "id": "count-ordinary-number",
+    "input": "count 58",
+    "expectedOutput": "2",
+    "objectives": ["digit-count"],
+    "starterExpected": "PASS"
+  }
+]

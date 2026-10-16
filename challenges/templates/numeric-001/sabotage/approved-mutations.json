@@ -1,0 +1,29 @@
+[
+  {
+    "id": "sabotage-clamp-lower-bound",
+    "functionId": "clamp-value",
+    "objectiveId": "clamp-boundaries",
+    "type": "exact-source-replacement",
+    "from": "if (value < lower) return lower;",
+    "to": "if (value < lower) return upper;",
+    "tokenCost": 1
+  },
+  {
+    "id": "sabotage-sum-digits",
+    "functionId": "sum-digits",
+    "objectiveId": "digit-sum",
+    "type": "exact-source-replacement",
+    "from": "while (value > 0) {",
+    "to": "while (value > 10) {",
+    "tokenCost": 1
+  },
+  {
+    "id": "sabotage-count-zero",
+    "functionId": "count-digits",
+    "objectiveId": "digit-count",
+    "type": "exact-source-replacement",
+    "from": "if (value == 0) return 1;",
+    "to": "if (value == 0) return 0;",
+    "tokenCost": 1
+  }
+]
