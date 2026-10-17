@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "functionCountByPlayerCount": [
+    {
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "minFunctions": 2,
+      "maxFunctions": 2
+    },
+    {
+      "minPlayers": 5,
+      "maxPlayers": 8,
+      "minFunctions": 3,
+      "maxFunctions": 3
+    }
+  ],
+  "functions": [
+    {
+      "id": "clamp-value",
+      "operation": "clamp",
+      "argumentCount": 3
+    },
+    {
+      "id": "sum-digits",
+      "operation": "sum",
+      "argumentCount": 1
+    },
+    {
+      "id": "count-digits",
+      "operation": "count",
+      "argumentCount": 1
+    }
+  ]
+}
