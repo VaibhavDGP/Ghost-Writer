@@ -1,3 +1,6 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { generateChallenge } from "./challenge-generator.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Player , Room } from "../types/room.js";
 import {
@@ -187,10 +190,40 @@ export async function startRoom(
     return { outcome: "UNAUTHORIZED" };
   }
 
-  return startRoomInStore(
-    code,
-    hashSessionToken(sessionToken),
+  const tokenHash = hashSessionToken(sessionToken);
+  const challengePackageDirectory = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../../challenges/templates/numeric-001",
   );
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const room = await findRoomByCode(code);
+
+    if (room === null) {
+      return { outcome: "NOT_FOUND" };
+    }
+
+    const challenge =
+  room.phase === "IN_PROGRESS" || room.players.length < 2
+    ? null
+    : await generateChallenge(
+        challengePackageDirectory,
+        room.players.length,
+      );
+
+    const result = await startRoomInStore(
+      code,
+      tokenHash,
+      room.players.length,
+      challenge,
+    );
+
+    if (result.outcome !== "PLAYER_COUNT_CHANGED") {
+      return result;
+    }
+  }
+
+  return { outcome: "RETRY_REQUIRED" };
 }
 
 export async function leaveRoom(

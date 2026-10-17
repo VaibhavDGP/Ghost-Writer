@@ -806,6 +806,17 @@ test("the host starts a room when every guest is ready", async () => {
 
   assert.equal(started.status, 200);
   assert.equal(started.data.room.phase, "IN_PROGRESS");
+    const challenge = started.data.room.challenge;
+
+  assert.ok(challenge);
+  assert.equal(challenge.language, "cpp");
+  assert.equal(typeof challenge.source, "string");
+  assert.ok(challenge.sourceHash);
+  assert.ok(challenge.publicTests.length > 0);
+  assert.equal("referenceSource" in challenge, false);
+  assert.equal("hiddenTests" in challenge, false);
+  assert.equal("seed" in challenge, false);
+  
   assert.equal(started.data.room.id, fixture.room.id);
   assert.equal(
     started.data.room.hostPlayerId,

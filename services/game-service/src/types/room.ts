@@ -1,3 +1,5 @@
+import type { GeneratedChallenge } from "../services/challenge-generator.js";
+
 export interface Player {
   id: string;
   displayName: string;
@@ -13,4 +15,5 @@ export interface Room {
   players: Player[];
   maxPlayers: number;
   createdAt: string;
+  challenge?: GeneratedChallenge["playerFacing"];
 }

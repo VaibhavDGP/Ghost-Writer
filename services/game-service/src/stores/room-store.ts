@@ -1,4 +1,5 @@
 import { redis } from "../config/redis.js";
+import type { GeneratedChallenge } from "../services/challenge-generator.js";
 import type { Player , Room } from "../types/room.js";
 
 // Starter policy: rooms expire one hour after creation.
@@ -6,6 +7,10 @@ const ROOM_TTL_SECONDS = 60 * 60;
 
 function roomKey(code: string): string {
   return `ghost-writer:room:${code}`;
+}
+
+function serverChallengeKey(code: string): string {
+  return `ghost-writer:room:${code}:server-challenge`;
 }
 
 export async function saveNewRoom(room: Room): Promise<boolean> {
@@ -442,7 +447,9 @@ export type StartRoomResult =
   | { outcome: "FORBIDDEN" }
   | { outcome: "NOT_IN_LOBBY" }
   | { outcome: "NOT_ENOUGH_PLAYERS" }
-  | { outcome: "PLAYERS_NOT_READY" };
+  | { outcome: "PLAYERS_NOT_READY" }
+  | { outcome: "PLAYER_COUNT_CHANGED" }
+  | { outcome: "RETRY_REQUIRED" };
 
 const MIN_PLAYERS_TO_START = 2;
 
@@ -495,15 +502,37 @@ const START_ROOM_SCRIPT = `
     return cjson.encode({ outcome = "NOT_ENOUGH_PLAYERS" })
   end
 
+    local expectedPlayerCount = tonumber(ARGV[3])
+
+  if #room.players ~= expectedPlayerCount then
+    return cjson.encode({ outcome = "PLAYER_COUNT_CHANGED" })
+  end
+
   for _, player in ipairs(room.players) do
     if player.id ~= room.hostPlayerId and player.isReady ~= true then
       return cjson.encode({ outcome = "PLAYERS_NOT_READY" })
     end
   end
 
+    local challenge = cjson.decode(ARGV[4])
+
   room.phase = "IN_PROGRESS"
 
+  if challenge then
+    room.challenge = challenge.playerFacing
+  end
+
   redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
+
+  if challenge then
+    redis.call("SET", KEYS[3], cjson.encode(challenge.serverOnly))
+
+    local ttl = redis.call("PTTL", KEYS[1])
+
+    if ttl >= 0 then
+      redis.call("PEXPIRE", KEYS[3], ttl)
+    end
+  end
 
   return cjson.encode({
     outcome = "STARTED",
@@ -514,20 +543,22 @@ const START_ROOM_SCRIPT = `
 export async function startRoomInStore(
   code: string,
   tokenHash: string,
+  expectedPlayerCount: number,
+  challenge: GeneratedChallenge | null,
 ): Promise<StartRoomResult> {
-  const result = await redis.eval(
-    START_ROOM_SCRIPT,
-    {
-      keys: [
-        roomKey(code),
-        sessionsKey(code),
-      ],
-      arguments: [
-        tokenHash,
-        String(MIN_PLAYERS_TO_START),
-      ],
-    },
-  );
+  const result = await redis.eval(START_ROOM_SCRIPT, {
+    keys: [
+      roomKey(code),
+      sessionsKey(code),
+      serverChallengeKey(code),
+    ],
+    arguments: [
+      tokenHash,
+      String(MIN_PLAYERS_TO_START),
+      String(expectedPlayerCount),
+      JSON.stringify(challenge),
+    ],
+  });
 
   if (typeof result !== "string") {
     throw new Error("Unexpected Redis start-room response.");
@@ -570,7 +601,7 @@ const LEAVE_ROOM_SCRIPT = `
   end
 
   if room.hostPlayerId == playerId then
-    redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
+   redis.call("DEL", KEYS[1], KEYS[2], KEYS[3], KEYS[4])
 
     return cjson.encode({
       outcome = "ROOM_CLOSED",
@@ -596,9 +627,10 @@ export async function leaveRoomInStore(
 ): Promise<LeaveRoomResult> {
   const result = await redis.eval(LEAVE_ROOM_SCRIPT, {
     keys: [
-      roomKey(code),
-      sessionsKey(code),
-      joinRequestsKey(code),
+        roomKey(code),
+        sessionsKey(code),
+        joinRequestsKey(code),
+        serverChallengeKey(code),
     ],
     arguments: [tokenHash],
   });

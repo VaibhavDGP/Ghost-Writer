@@ -268,3 +268,7 @@ export async function generateChallenge(
     },
   };
 }
+
+export type GeneratedChallenge = Awaited<
+  ReturnType<typeof generateChallenge>
+>;

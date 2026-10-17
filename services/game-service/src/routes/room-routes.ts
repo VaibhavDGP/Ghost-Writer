@@ -355,6 +355,12 @@ roomRouter.post("/:code/start", async (req, res) => {
           error: "Room not found or expired.",
         });
         return;
+      
+      case "RETRY_REQUIRED":
+        res.status(409).json({
+          error: "The player list changed while starting. Please try again.",
+        });
+        return;
 
       case "UNAUTHORIZED":
         res.set("WWW-Authenticate", "Bearer");
