@@ -4,10 +4,22 @@ import "./App.css";
 type Theme = "light" | "dark";
 type Action = "create" | "join";
 
+interface Player {
+  id: string;
+  displayName: string;
+  isReady?: boolean;
+}
+
+interface Room {
+  code: string;
+  hostPlayerId: string;
+  phase: "LOBBY" | "IN_PROGRESS";
+  players: Player[];
+  maxPlayers: number;
+}
+
 interface RoomApiResponse {
-  room?: {
-    code?: string;
-  };
+  room?: Room;
   playerId?: string;
   error?: string;
 }
@@ -43,14 +55,75 @@ function App() {
   });
   const [busy, setBusy] = useState<Action | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [roomCode, setRoomCode] = useState<string | null>(null);
-  const [roomRole, setRoomRole] = useState<Action | null>(null);
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [roomCode, setRoomCode] = useState<string | null>(() =>
+    window.sessionStorage.getItem("ghostWriterRoomCode"),
+  );
+  const [playerId, setPlayerId] = useState<string | null>(() =>
+    window.sessionStorage.getItem("ghostWriterPlayerId"),
+  );
+  const [room, setRoom] = useState<Room | null>(null);
   const [copied, setCopied] = useState(false);
+  const [lobbyBusy, setLobbyBusy] = useState<"ready" | "start" | "leave" | null>(
+    null,
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("ghostWriterTheme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!roomCode || !playerId) return;
+
+    let ignoreResults = false;
+    let requestInProgress = false;
+
+    async function refreshRoom() {
+      if (requestInProgress) return;
+      requestInProgress = true;
+
+      try {
+        const response = await fetch(`/rooms/${roomCode}`, {
+          cache: "no-store",
+        });
+        const result = (await response.json()) as RoomApiResponse;
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Could not load this room.");
+        }
+
+        if (!result.room) {
+          throw new Error("The server returned incomplete room details.");
+        }
+
+        if (!ignoreResults) {
+          setRoom(result.room);
+          setLobbyError(null);
+        }
+      } catch (error) {
+        if (!ignoreResults) {
+          setLobbyError(
+            error instanceof Error
+              ? `${error.message} Reconnecting…`
+              : "Could not reach the game server. Reconnecting…",
+          );
+        }
+      } finally {
+        requestInProgress = false;
+      }
+    }
+
+    void refreshRoom();
+    const intervalId = window.setInterval(() => {
+      void refreshRoom();
+    }, 2000);
+
+    return () => {
+      ignoreResults = true;
+      window.clearInterval(intervalId);
+    };
+  }, [roomCode, playerId]);
 
   async function submitRoom(
     event: FormEvent<HTMLFormElement>,
@@ -58,8 +131,8 @@ function App() {
   ) {
     event.preventDefault();
     setNotice(null);
-    setRoomCode(null);
-    setRoomRole(null);
+    setLobbyError(null);
+    setRoom(null);
     setCopied(false);
     setBusy(action);
 
@@ -111,13 +184,12 @@ function App() {
         throw new Error("The server returned an incomplete room response.");
       }
 
-      const joinedCode = result.room.code;
-
-      window.sessionStorage.setItem("ghostWriterRoomCode", joinedCode);
+      window.sessionStorage.setItem("ghostWriterRoomCode", result.room.code);
       window.sessionStorage.setItem("ghostWriterPlayerId", result.playerId);
 
-      setRoomRole(action);
-      setRoomCode(joinedCode);
+      setRoomCode(result.room.code);
+      setPlayerId(result.playerId);
+      setRoom(result.room);
     } catch (error) {
       setNotice({
         kind: "error",
@@ -137,12 +209,122 @@ function App() {
     try {
       await window.navigator.clipboard.writeText(roomCode);
       setCopied(true);
+      setLobbyError(null);
     } catch {
       setCopied(false);
-      setNotice({
-        kind: "error",
-        text: "Copy failed. Select the room code and copy it manually.",
+      setLobbyError("Copy failed. Select the room code and copy it manually.");
+    }
+  }
+
+  async function toggleReady() {
+    if (!roomCode || !playerId || !room) return;
+
+    const currentPlayer = room.players.find((player) => player.id === playerId);
+    if (!currentPlayer) return;
+
+    setLobbyBusy("ready");
+    setLobbyError(null);
+
+    try {
+      const response = await fetch(`/rooms/${roomCode}/ready`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getSessionToken()}`,
+        },
+        body: JSON.stringify({ isReady: !currentPlayer.isReady }),
       });
+
+      const result = (await response.json()) as RoomApiResponse;
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not update your ready status.");
+      }
+
+      if (result.room) {
+        setRoom(result.room);
+      }
+    } catch (error) {
+      setLobbyError(
+        error instanceof Error
+          ? error.message
+          : "Could not reach the game server.",
+      );
+    } finally {
+      setLobbyBusy(null);
+    }
+  }
+
+  async function startGame() {
+    if (!roomCode) return;
+
+    setLobbyBusy("start");
+    setLobbyError(null);
+
+    try {
+      const response = await fetch(`/rooms/${roomCode}/start`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getSessionToken()}`,
+        },
+      });
+
+      const result = (await response.json()) as RoomApiResponse;
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not start the game.");
+      }
+
+      if (result.room) {
+        setRoom(result.room);
+      }
+    } catch (error) {
+      setLobbyError(
+        error instanceof Error
+          ? error.message
+          : "Could not reach the game server.",
+      );
+    } finally {
+      setLobbyBusy(null);
+    }
+  }
+
+  async function leaveRoom() {
+    if (!roomCode) return;
+
+    setLobbyBusy("leave");
+    setLobbyError(null);
+
+    try {
+      const response = await fetch(`/rooms/${roomCode}/players/me`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${getSessionToken()}`,
+        },
+      });
+
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not leave the room.");
+      }
+
+      window.sessionStorage.removeItem("ghostWriterRoomCode");
+      window.sessionStorage.removeItem("ghostWriterPlayerId");
+
+      setRoomCode(null);
+      setPlayerId(null);
+      setRoom(null);
+      setNotice(null);
+      setLobbyError(null);
+    } catch (error) {
+      setLobbyError(
+        error instanceof Error
+          ? error.message
+          : "Could not reach the game server.",
+      );
+    } finally {
+      setLobbyBusy(null);
     }
   }
 
@@ -150,14 +332,25 @@ function App() {
     setTheme(theme === "light" ? "dark" : "light");
   }
 
-  if (roomCode) {
+  const isHost = Boolean(room && playerId === room.hostPlayerId);
+  const guestPlayers =
+    room?.players.filter((player) => player.id !== room.hostPlayerId) ?? [];
+  const allGuestsReady =
+    guestPlayers.length > 0 && guestPlayers.every((player) => player.isReady);
+  const canStart = Boolean(
+    room &&
+      isHost &&
+      room.players.length >= 2 &&
+      allGuestsReady &&
+      room.phase === "LOBBY",
+  );
+
+  if (roomCode && playerId) {
     return (
       <main className="page-shell">
         <header className="topbar">
           <a className="brand" href="/" aria-label="Ghost Writer home">
-            <span className="brand-mark" aria-hidden="true">
-              GW
-            </span>
+            <span className="brand-mark" aria-hidden="true">GW</span>
             <span>GHOST WRITER</span>
           </a>
 
@@ -179,34 +372,48 @@ function App() {
 
         <section className="intro">
           <div className="intro-copy">
-            <p className="eyebrow">ROOM CREATED / CREW ASSEMBLING</p>
+            <p className="eyebrow">
+              {room?.phase === "IN_PROGRESS"
+                ? "THE GAME IS STARTING"
+                : "ROOM CREATED / CREW ASSEMBLING"}
+            </p>
             <h1>
-              You’re in.
-              <br />
-              <span>Gather your crew.</span>
+              {room?.phase === "IN_PROGRESS" ? (
+                <>
+                  Crew ready.
+                  <br />
+                  <span>Game started.</span>
+                </>
+              ) : (
+                <>
+                  You’re in.
+                  <br />
+                  <span>Gather your crew.</span>
+                </>
+              )}
             </h1>
             <p className="intro-description">
-              {roomRole === "create"
-                ? "You’re hosting this room. Share the code so your crew can join."
-                : "You’ve joined the room. Share the code with your crew if they still need it."}
+              {room?.phase === "IN_PROGRESS"
+                ? "The next screen will introduce the countdown and player roles."
+                : isHost
+                  ? "You’re hosting this room. Share the code and start when every guest is ready."
+                  : "Mark yourself ready when you’re set. The host will start the game."}
             </p>
           </div>
 
           <aside className="brief-card">
             <div className="brief-topline">
               <span>ROOM STATUS</span>
-              <span className="brief-index">OPEN</span>
+              <span className="brief-index">
+                {room?.phase === "IN_PROGRESS" ? "STARTED" : "OPEN"}
+              </span>
             </div>
             <div className="brief-rule" />
-            <p className="brief-label">NEXT STEP</p>
-            <p className="brief-text">
-              Share your room code.
-              <br />
-              Wait for your crew.
-            </p>
+            <p className="brief-label">YOUR ROOM CODE</p>
+            <p className="brief-text">{roomCode}</p>
             <div className="brief-bottom">
               <span className="brief-square" />
-              <span>THE ROOM IS READY</span>
+              <span>{room?.players.length ?? "…"} PLAYERS</span>
             </div>
           </aside>
         </section>
@@ -214,13 +421,15 @@ function App() {
         <section className="room-desk" aria-label="Room lobby">
           <div className="desk-heading">
             <span className="desk-number">02</span>
-            <h2>Your room is ready</h2>
-            <span className="desk-caption">Invite your crew</span>
+            <h2>Your crew</h2>
+            <span className="desk-caption">
+              {room ? `${room.players.length} / ${room.maxPlayers} players` : "Loading room…"}
+            </span>
           </div>
 
           <div className="room-code-result">
             <div>
-              <p className="result-label">YOUR ROOM CODE</p>
+              <p className="result-label">ROOM CODE</p>
               <p className="result-code">{roomCode}</p>
             </div>
             <button
@@ -232,21 +441,97 @@ function App() {
             </button>
           </div>
 
-          <p className="form-note">
-            Waiting for players to join. Keep this page open.
-          </p>
+          {room && (
+            <div className="forms-grid">
+              {room.players.map((player) => {
+                const playerIsHost = player.id === room.hostPlayerId;
+                const isCurrentPlayer = player.id === playerId;
 
-          {notice && (
-            <div
-              className={`notice notice-${notice.kind}`}
-              role={notice.kind === "error" ? "alert" : "status"}
-            >
-              <span className="notice-icon" aria-hidden="true">
-                {notice.kind === "error" ? "!" : "✓"}
-              </span>
-              <span>{notice.text}</span>
+                return (
+                  <article className="room-form" key={player.id}>
+                    <div className="form-title-row">
+                      <span className="form-glyph" aria-hidden="true">
+                        {playerIsHost ? "★" : "·"}
+                      </span>
+                      <h3>
+                        {player.displayName}
+                        {isCurrentPlayer ? " (you)" : ""}
+                      </h3>
+                    </div>
+                    <p className="form-note">
+                      {playerIsHost
+                        ? "HOST"
+                        : player.isReady
+                          ? "READY"
+                          : "NOT READY"}
+                    </p>
+                  </article>
+                );
+              })}
             </div>
           )}
+
+          {room?.phase === "LOBBY" && (
+            <div className="lobby-actions">
+              {isHost ? (
+                <>
+                  <p className="form-note">
+                    {room.players.length < 2
+                      ? "At least one more player must join before you can start."
+                      : allGuestsReady
+                        ? "Every guest is ready. You can start the game."
+                        : "Waiting for every guest to mark themselves ready."}
+                  </p>
+                  <button
+                    className="action-button primary-button"
+                    type="button"
+                    onClick={() => void startGame()}
+                    disabled={!canStart || lobbyBusy !== null}
+                  >
+                    {lobbyBusy === "start" ? "STARTING…" : "START GAME"}
+                    <span aria-hidden="true">↗</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="action-button secondary-button"
+                  type="button"
+                  onClick={() => void toggleReady()}
+                  disabled={lobbyBusy !== null || !room}
+                >
+                  {lobbyBusy === "ready"
+                    ? "UPDATING…"
+                    : room.players.find((player) => player.id === playerId)
+                        ?.isReady
+                      ? "I’M READY ✓"
+                      : "MARK ME READY"}
+                  <span aria-hidden="true">→</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {room?.phase === "IN_PROGRESS" && (
+            <p className="form-note">
+              The game has started. The countdown and role reveal screen are the next feature.
+            </p>
+          )}
+
+          {lobbyError && (
+            <div className="notice notice-error" role="alert">
+              <span className="notice-icon" aria-hidden="true">!</span>
+              <span>{lobbyError}</span>
+            </div>
+          )}
+
+          <button
+            className="copy-button"
+            type="button"
+            onClick={() => void leaveRoom()}
+            disabled={lobbyBusy !== null}
+          >
+            {lobbyBusy === "leave" ? "LEAVING…" : "LEAVE ROOM"}
+          </button>
         </section>
 
         <footer className="footer">
@@ -261,9 +546,7 @@ function App() {
     <main className="page-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="Ghost Writer home">
-          <span className="brand-mark" aria-hidden="true">
-            GW
-          </span>
+          <span className="brand-mark" aria-hidden="true">GW</span>
           <span>GHOST WRITER</span>
         </a>
 
@@ -336,9 +619,7 @@ function App() {
             onSubmit={(event) => void submitRoom(event, "create")}
           >
             <div className="form-title-row">
-              <span className="form-glyph" aria-hidden="true">
-                +
-              </span>
+              <span className="form-glyph" aria-hidden="true">+</span>
               <h3>Start a new room</h3>
             </div>
             <label htmlFor="create-name">Player name</label>
@@ -373,9 +654,7 @@ function App() {
             onSubmit={(event) => void submitRoom(event, "join")}
           >
             <div className="form-title-row">
-              <span className="form-glyph join-glyph" aria-hidden="true">
-                ↳
-              </span>
+              <span className="form-glyph join-glyph" aria-hidden="true">↳</span>
               <h3>Join your crew</h3>
             </div>
             <label htmlFor="join-name">Player name</label>
