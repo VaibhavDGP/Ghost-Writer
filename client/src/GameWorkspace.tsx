@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import "./monaco-setup";
 import "./GameWorkspace.css";
@@ -51,11 +51,60 @@ interface LoadedChallenge {
   playerId: string;
 }
 
+type TestStatus =
+  | "PASSED"
+  | "WRONG_ANSWER"
+  | "RUNTIME_ERROR"
+  | "TIME_OR_RESOURCE_LIMIT"
+  | "OUTPUT_LIMIT";
+
+interface TestResult {
+  id: string;
+  status: TestStatus;
+  stdout: string;
+  stderr: string;
+  expectedOutput: string;
+}
+
+type JudgeResult =
+  | {
+      status: "COMPILE_ERROR";
+      message: string;
+      compilerOutput: string;
+      tests: [];
+    }
+  | {
+      status: "COMPLETED";
+      passed: number;
+      total: number;
+      tests: TestResult[];
+    };
+
+interface RunResponse {
+  matchId?: string;
+  result?: JudgeResult;
+  error?: string;
+}
+
+interface CompletedRun {
+  source: string;
+  result: JudgeResult;
+}
+
 interface DraftProps {
+  roomCode: string;
   challenge: Challenge;
   storageKey: string;
   theme: "light" | "dark";
 }
+
+const STATUS_LABELS: Record<TestStatus, string> = {
+  PASSED: "Passed",
+  WRONG_ANSWER: "Wrong answer",
+  RUNTIME_ERROR: "Runtime error",
+  TIME_OR_RESOURCE_LIMIT: "Time or resource limit",
+  OUTPUT_LIMIT: "Output limit",
+};
 
 function readSavedDraft(storageKey: string, fallback: string) {
   try {
@@ -72,7 +121,97 @@ function readSavedDraft(storageKey: string, fallback: string) {
   }
 }
 
+function RunResults({
+  run,
+  currentDraft,
+}: {
+  run: CompletedRun;
+  currentDraft: string;
+}) {
+  const result = run.result;
+  const outdated = run.source !== currentDraft;
+
+  return (
+    <section className="gw-run-results" aria-label="Public test results">
+      <h2>Last completed run</h2>
+
+      {outdated && (
+        <p className="gw-warning" role="status">
+          Your draft has changed. These results belong to the code
+          you sent earlier. Run again to check the current draft.
+        </p>
+      )}
+
+      {result.status === "COMPILE_ERROR" ? (
+        <>
+          <p className="gw-result-summary gw-result-failed">
+            Compilation failed
+          </p>
+
+          <p>{result.message}</p>
+
+          <pre className="gw-run-output">
+            {result.compilerOutput || "No compiler diagnostics were returned."}
+          </pre>
+        </>
+      ) : (
+        <>
+          <p
+            className={`gw-result-summary ${
+              result.passed === result.total
+                ? "gw-result-passed"
+                : "gw-result-failed"
+            }`}
+          >
+            {result.passed} / {result.total} public tests passed
+          </p>
+
+          {result.tests.map((test) => (
+            <details className="gw-run-case" key={test.id}>
+              <summary>
+                <span>{test.id}</span>
+                <span
+                  className={
+                    test.status === "PASSED"
+                      ? "gw-result-passed"
+                      : "gw-result-failed"
+                  }
+                >
+                  {STATUS_LABELS[test.status] ?? test.status}
+                </span>
+              </summary>
+
+              <p className="gw-output-label">Your output</p>
+              <pre className="gw-run-output">
+                {test.stdout || "(no output)"}
+              </pre>
+
+              <p className="gw-output-label">Expected output</p>
+              <pre className="gw-run-output">
+                {test.expectedOutput || "(empty output)"}
+              </pre>
+
+              {test.stderr && (
+                <>
+                  <p className="gw-output-label">Error output</p>
+                  <pre className="gw-run-output">{test.stderr}</pre>
+                </>
+              )}
+            </details>
+          ))}
+        </>
+      )}
+
+      <p className="gw-muted">
+        Public tests are a preview. Passing them does not verify all
+        objectives or submit a repair. The official program is unchanged.
+      </p>
+    </section>
+  );
+}
+
 function DraftEditor({
+  roomCode,
   challenge,
   storageKey,
   theme,
@@ -85,6 +224,18 @@ function DraftEditor({
   const [storageError, setStorageError] = useState<string | null>(
     initialDraft.error,
   );
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [lastRun, setLastRun] = useState<CompletedRun | null>(null);
+
+  const activeRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      activeRequest.current?.abort();
+      activeRequest.current = null;
+    };
+  }, []);
 
   const hasChanges = draft !== challenge.source;
 
@@ -96,7 +247,7 @@ function DraftEditor({
       setStorageError(null);
     } catch {
       setStorageError(
-        "Your edits are still in this editor, but could not be saved in this tab. Copy your code before refreshing.",
+        "Your edits are still in the editor but could not be saved. Copy your code before refreshing.",
       );
     }
   }
@@ -114,30 +265,150 @@ function DraftEditor({
     updateDraft(challenge.source);
   }
 
+  async function runDraft() {
+    // Prevent duplicate requests even before React updates the button.
+    if (activeRequest.current) return;
+
+    setRunError(null);
+    setLastRun(null);
+
+    if (draft.trim().length === 0) {
+      setRunError("Write some C++ code before running.");
+      return;
+    }
+
+    if (new TextEncoder().encode(draft).length > 64 * 1024) {
+      setRunError("Your draft exceeds the 64 KiB source limit.");
+      return;
+    }
+
+    // Capture exactly the source that this run will evaluate.
+    const submittedSource = draft;
+    const controller = new AbortController();
+
+    activeRequest.current = controller;
+    setRunning(true);
+
+    let timedOut = false;
+
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 120_000);
+
+    try {
+      const sessionToken = window.sessionStorage.getItem(
+        "ghostWriterSessionToken",
+      );
+
+      if (!sessionToken) {
+        throw new Error(
+          "Your session is missing. Return home and rejoin the room.",
+        );
+      }
+
+      const response = await fetch(
+        `/rooms/${encodeURIComponent(roomCode)}/run`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({
+            source: submittedSource,
+            matchId: challenge.matchId,
+          }),
+          cache: "no-store",
+          signal: controller.signal,
+        },
+      );
+
+      const data = (await response.json()) as RunResponse;
+
+      if (!response.ok) {
+        const retryAfter = response.headers.get("Retry-After");
+
+        const retryMessage =
+          response.status === 429 && retryAfter
+            ? ` Retry after about ${retryAfter} seconds.`
+            : "";
+
+        throw new Error(
+          (data.error ?? "The run request failed.") + retryMessage,
+        );
+      }
+
+      if (
+        data.matchId !== challenge.matchId ||
+        !data.result ||
+        (
+          data.result.status !== "COMPLETED" &&
+          data.result.status !== "COMPILE_ERROR"
+        )
+      ) {
+        throw new Error("The server returned an invalid run result.");
+      }
+
+      if (activeRequest.current === controller) {
+        setLastRun({
+          source: submittedSource,
+          result: data.result,
+        });
+      }
+    } catch (error) {
+      // Ignore a response after leaving this workspace.
+      if (activeRequest.current !== controller) return;
+
+      setRunError(
+        timedOut
+          ? "The run request timed out. The server may still be finishing cleanup. Wait briefly before retrying."
+          : error instanceof Error
+            ? error.message
+            : "Could not reach the code judge.",
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
+
+      if (activeRequest.current === controller) {
+        activeRequest.current = null;
+        setRunning(false);
+      }
+    }
+  }
+
   return (
-    <section
-      className="gw-editor-panel"
-      aria-label="Private C++ draft"
-    >
+    <section className="gw-editor-panel" aria-label="Private C++ draft">
       <div className="gw-editor-toolbar">
         <div>
           <strong>main.cpp</strong>
           <span className="gw-draft-label">PRIVATE DRAFT</span>
         </div>
 
-        <button
-          className="copy-button"
-          type="button"
-          onClick={resetDraft}
-          disabled={!hasChanges}
-        >
-          RESET DRAFT
-        </button>
+        <div className="gw-draft-actions">
+          <button
+            className="copy-button"
+            type="button"
+            onClick={resetDraft}
+            disabled={!hasChanges}
+          >
+            RESET DRAFT
+          </button>
+
+          <button
+            className="copy-button gw-run-button"
+            type="button"
+            onClick={() => void runDraft()}
+            disabled={running || draft.trim().length === 0}
+          >
+            {running ? "RUNNING…" : "RUN PUBLIC TESTS"}
+          </button>
+        </div>
       </div>
 
       <p className="gw-editor-note">
-        Your edits stay in this browser tab. Other players continue
-        to see the official code.
+        Run sends a snapshot of your draft to the judge. It does not
+        change the official program or another player’s draft.
       </p>
 
       <div className="gw-editor-container">
@@ -148,9 +419,7 @@ function DraftEditor({
           value={draft}
           path={`file:///ghost-writer/${challenge.matchId}/main.cpp`}
           onChange={(value) => {
-            if (value !== undefined) {
-              updateDraft(value);
-            }
+            if (value !== undefined) updateDraft(value);
           }}
           loading={
             <p className="gw-loading" role="status">
@@ -190,10 +459,21 @@ function DraftEditor({
         </p>
       )}
 
-      <p className="gw-editor-note">
-        Code execution and repair submission will be added next.
-        Editing here does not update the shared program.
-      </p>
+      {running && (
+        <p className="gw-editor-note" role="status">
+          Compiling and running public tests. You can continue editing.
+        </p>
+      )}
+
+      {runError && (
+        <p className="gw-warning" role="alert">
+          {runError}
+        </p>
+      )}
+
+      {lastRun && (
+        <RunResults run={lastRun} currentDraft={draft} />
+      )}
     </section>
   );
 }
@@ -286,12 +566,9 @@ export default function GameWorkspace({
 
     void loadChallenge();
 
-    return () => {
-      controller.abort();
-    };
+    return () => controller.abort();
   }, [roomCode, attempt]);
 
-  // A draft belongs to one player, match, and official source snapshot.
   const storageKey = loaded
     ? [
         "ghostWriterDraft",
@@ -306,9 +583,7 @@ export default function GameWorkspace({
     <main className="page-shell gw-workspace">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            GW
-          </span>
+          <span className="brand-mark" aria-hidden="true">GW</span>
           <span>GHOST WRITER</span>
         </div>
 
@@ -358,7 +633,6 @@ export default function GameWorkspace({
       {loadError ? (
         <section className="gw-load-message">
           <p role="alert">{loadError}</p>
-
           <button
             className="copy-button"
             type="button"
@@ -375,6 +649,7 @@ export default function GameWorkspace({
         <div className="gw-workspace-grid">
           <DraftEditor
             key={storageKey}
+            roomCode={roomCode}
             storageKey={storageKey}
             challenge={loaded.challenge}
             theme={theme}
@@ -385,8 +660,8 @@ export default function GameWorkspace({
               <h2>Repair objectives</h2>
 
               <p className="gw-muted">
-                Read these requirements while investigating the
-                program. Completion is not evaluated yet.
+                Use these requirements to investigate the program.
+                Public test results do not verify objective completion.
               </p>
 
               <ul className="gw-objective-list">
@@ -405,17 +680,15 @@ export default function GameWorkspace({
               <h2>Public test examples</h2>
 
               <p className="gw-muted">
-                These are expected results, not results from
-                running your draft.
+                Expected inputs and outputs. Your execution results
+                appear below the editor.
               </p>
 
               {loaded.challenge.publicTests.map((testCase) => (
                 <details className="gw-test-case" key={testCase.id}>
                   <summary>{testCase.id}</summary>
-
                   <p>Input</p>
                   <pre>{testCase.input}</pre>
-
                   <p>Expected output</p>
                   <pre>{testCase.expectedOutput}</pre>
                 </details>
@@ -434,7 +707,6 @@ export default function GameWorkspace({
           >
             RETURN TO HOME
           </button>
-
           <p className="gw-muted">
             This clears your local room selection. Use Leave Room
             to leave on the server.
