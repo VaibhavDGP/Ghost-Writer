@@ -1,6 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
 import GameStartSequence from "./GameStartSequence";
+import {
+  clearPendingJoin,
+  clearStoredRoom,
+  getJoinRequestId,
+  roomResponseAction,
+} from "./room-session";
 
 type Theme = "light" | "dark";
 type Action = "create" | "join";
@@ -34,7 +40,7 @@ interface Notice {
 function getSessionToken(): string {
   const existingToken = window.sessionStorage.getItem("ghostWriterSessionToken");
 
-  if (existingToken) {
+  if (existingToken && /^[0-9a-f]{64}$/.test(existingToken)) {
     return existingToken;
   }
 
@@ -70,6 +76,20 @@ function App() {
     null,
   );
 
+  function clearLocalRoom() {
+    clearStoredRoom(window.sessionStorage);
+    setRoomCode(null);
+    setPlayerId(null);
+    setRoom(null);
+    setLobbyError(null);
+    setCopied(false);
+  }
+
+  function returnToEntry() {
+    clearLocalRoom();
+    setNotice(null);
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("ghostWriterTheme", theme);
@@ -90,6 +110,14 @@ function App() {
           cache: "no-store",
         });
         const result = (await response.json()) as RoomApiResponse;
+
+        if (roomResponseAction(response.status) === "closed") {
+          if (!ignoreResults) {
+            clearLocalRoom();
+            setNotice({ kind: "error", text: "This room has closed or expired." });
+          }
+          return;
+        }
 
         if (!response.ok) {
           throw new Error(result.error ?? "Could not load this room.");
@@ -170,7 +198,9 @@ function App() {
               : {
                   displayName,
                   sessionToken,
-                  requestId: window.crypto.randomUUID(),
+                  requestId: getJoinRequestId(
+                    window.sessionStorage, code, displayName, sessionToken,
+                  ),
                 },
           ),
         },
@@ -179,6 +209,10 @@ function App() {
       const result = (await response.json()) as RoomApiResponse;
 
       if (!response.ok) {
+        // Network/5xx failures may have happened after an accepted join.
+        if (action === "join" && response.status >= 400 && response.status < 500) {
+          clearPendingJoin(window.sessionStorage);
+        }
         throw new Error(result.error ?? "The room request failed.");
       }
 
@@ -186,6 +220,7 @@ function App() {
         throw new Error("The server returned an incomplete room response.");
       }
 
+      clearPendingJoin(window.sessionStorage);
       window.sessionStorage.setItem("ghostWriterRoomCode", result.room.code);
       window.sessionStorage.setItem("ghostWriterPlayerId", result.playerId);
 
@@ -307,18 +342,12 @@ function App() {
 
       const result = (await response.json()) as { error?: string };
 
-      if (!response.ok) {
+      if (!response.ok && response.status !== 404 && response.status !== 401) {
         throw new Error(result.error ?? "Could not leave the room.");
       }
 
-      window.sessionStorage.removeItem("ghostWriterRoomCode");
-      window.sessionStorage.removeItem("ghostWriterPlayerId");
-
-      setRoomCode(null);
-      setPlayerId(null);
-      setRoom(null);
+      clearLocalRoom();
       setNotice(null);
-      setLobbyError(null);
     } catch (error) {
       setLobbyError(
         error instanceof Error
@@ -354,6 +383,10 @@ function App() {
       countdownEndsAt={room.countdownEndsAt}
       theme={theme}
       onToggleTheme={toggleTheme}
+      onLeave={() => void leaveRoom()}
+      onReturnToEntry={returnToEntry}
+      leaving={lobbyBusy === "leave"}
+      roomError={lobbyError}
     />
   );
 }
@@ -531,10 +564,18 @@ function App() {
           )}
 
           {lobbyError && (
-            <div className="notice notice-error" role="alert">
-              <span className="notice-icon" aria-hidden="true">!</span>
-              <span>{lobbyError}</span>
-            </div>
+            <>
+              <div className="notice notice-error" role="alert">
+                <span className="notice-icon" aria-hidden="true">!</span>
+                <span>{lobbyError}</span>
+              </div>
+              <button className="copy-button" type="button" onClick={returnToEntry}>
+                RETURN TO HOME
+              </button>
+              <p className="form-note">
+                Returning home only clears this device. Use Leave Room to leave on the server.
+              </p>
+            </>
           )}
 
           <button

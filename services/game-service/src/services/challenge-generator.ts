@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
@@ -126,10 +126,38 @@ function stripAuthoringField(testCase: TestCase) {
   return playerTest;
 }
 
+// Deterministic challenge selection only; never use this for sessions or roles.
+function seededRandomInt(seed: string) {
+  let counter = 0;
+  return (min: number, max: number): number => {
+    const range = max - min;
+    if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) ||
+        range < 1 || range > 0x100000000) {
+      throw new Error("Invalid random integer range.");
+    }
+    const limit = Math.floor(0x100000000 / range) * range;
+    let value: number;
+    do {
+      value = createHash("sha256")
+        .update(JSON.stringify([seed, counter++]))
+        .digest().readUInt32BE(0);
+    } while (value >= limit);
+    return min + (value % range);
+  };
+}
+
 export async function generateChallenge(
   packageDirectory: string,
   playerCount: number,
+  seed: string = randomBytes(16).toString("hex"),
 ) {
+  if (!Number.isInteger(playerCount)) {
+    throw new Error("Player count must be an integer.");
+  }
+  if (typeof seed !== "string" || seed.length === 0 || seed.length > 256) {
+    throw new Error("Seed must contain between 1 and 256 characters.");
+  }
+  const randomInt = seededRandomInt(seed);
   const manifest = await readJson<ChallengeManifest>(
     resolve(packageDirectory, "challenge.json"),
   );
@@ -147,6 +175,15 @@ export async function generateChallenge(
     throw new Error(`No generation rule for ${playerCount} players.`);
   }
 
+  if (!Number.isInteger(playerRule.minFunctions) ||
+      !Number.isInteger(playerRule.maxFunctions) ||
+      playerRule.minFunctions < 1 ||
+      playerRule.maxFunctions < playerRule.minFunctions ||
+      playerRule.maxFunctions > config.functions.length ||
+      new Set(config.functions.map((fn) => fn.id)).size !== config.functions.length) {
+    throw new Error("Invalid function selection rules.");
+  }
+
   const functionCount = randomInt(
     playerRule.minFunctions,
     playerRule.maxFunctions + 1,
@@ -155,7 +192,7 @@ export async function generateChallenge(
   const shuffledRules = [...config.functions];
 
   for (let index = shuffledRules.length - 1; index > 0; index--) {
-    const swapIndex = randomInt(index + 1);
+    const swapIndex = randomInt(0, index + 1);
     [shuffledRules[index], shuffledRules[swapIndex]] =
       [shuffledRules[swapIndex]!, shuffledRules[index]!];
   }
@@ -201,7 +238,8 @@ export async function generateChallenge(
   const selectedIds = new Set(selectedFunctions.map((fn) => fn.id));
   const selectedObjectives = manifest.objectives.filter(
     (objective) =>
-      objective.functionIds.some((id) => selectedIds.has(id)),
+      objective.functionIds.length > 0 &&
+      objective.functionIds.every((id) => selectedIds.has(id)),
   );
   const selectedObjectiveIds = new Set(
     selectedObjectives.map((objective) => objective.id),
@@ -261,7 +299,7 @@ export async function generateChallenge(
       publicTests: filteredPublicCases.map(stripAuthoringField),
     },
     serverOnly: {
-      seed: randomBytes(16).toString("hex"),
+      seed,
       selectedFunctionIds: selectedFunctions.map((fn) => fn.id),
       referenceSource,
       hiddenTests: filteredHiddenCases,

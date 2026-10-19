@@ -4,12 +4,13 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-  "test": "node --test tests/rooms.test.js",
-  "dev": "tsx watch src/index.ts",
-  "build": "tsc",
-  "start": "node dist/index.js",
-  "typecheck": "tsc --noEmit"
-},
+    "test": "node --import tsx --test tests/*.test.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --import tsx --test tests/challenge-generator.test.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

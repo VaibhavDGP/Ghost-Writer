@@ -40,7 +40,12 @@ export async function findRoomByCode(
     return null;
   }
 
-  return JSON.parse(data) as Room;
+  const room = JSON.parse(data) as Room;
+  // Accept rooms created by the earlier version, which stored a string.
+  if (room.countdownEndsAt !== undefined) {
+    room.countdownEndsAt = Number(room.countdownEndsAt);
+  }
+  return room;
 }
 
 export type JoinRoomResult =
@@ -154,7 +159,7 @@ const CREATE_ROOM_WITH_SESSION_SCRIPT = `
 
   -- A code might be reused after an older room expires.
   -- Remove any leftover metadata belonging to that older room.
-  redis.call("DEL", KEYS[2], KEYS[3], KEYS[4])
+  redis.call("DEL", KEYS[2], KEYS[3], KEYS[4], KEYS[5])
 
   redis.call("HSET", KEYS[2], ARGV[2], room.hostPlayerId)
 
@@ -176,6 +181,7 @@ export async function saveNewRoomWithSession(
   sessionsKey(room.code),
   joinRequestsKey(room.code),
   playerRolesKey(room.code),
+  serverChallengeKey(room.code),
 ],
       arguments: [
         JSON.stringify(room),
@@ -454,7 +460,7 @@ export type StartRoomResult =
   | { outcome: "NOT_IN_LOBBY" }
   | { outcome: "NOT_ENOUGH_PLAYERS" }
   | { outcome: "PLAYERS_NOT_READY" }
-  | { outcome: "PLAYER_COUNT_CHANGED" }
+  | { outcome: "ROSTER_CHANGED" }
   | { outcome: "RETRY_REQUIRED" };
 
 const MIN_PLAYERS_TO_START = 2;
@@ -491,6 +497,7 @@ const START_ROOM_SCRIPT = `
   end
 
   if room.phase == "IN_PROGRESS" then
+    room.countdownEndsAt = tonumber(room.countdownEndsAt)
     return cjson.encode({
       outcome = "STARTED",
       room = room
@@ -510,7 +517,7 @@ const START_ROOM_SCRIPT = `
   local expectedPlayerCount = tonumber(ARGV[3])
 
   if #room.players ~= expectedPlayerCount then
-    return cjson.encode({ outcome = "PLAYER_COUNT_CHANGED" })
+    return cjson.encode({ outcome = "ROSTER_CHANGED" })
   end
 
   for _, player in ipairs(room.players) do
@@ -522,14 +529,43 @@ const START_ROOM_SCRIPT = `
   local challenge = cjson.decode(ARGV[4])
   local roles = cjson.decode(ARGV[5])
 
+  -- The roster can change without its size changing while generation runs.
+  local assignmentCount = 0
+  local hackerCount = 0
+
+  for _, role in pairs(roles) do
+    assignmentCount = assignmentCount + 1
+    if role == "HACKER" then
+      hackerCount = hackerCount + 1
+    elseif role ~= "CODER" then
+      return cjson.encode({ outcome = "ROSTER_CHANGED" })
+    end
+  end
+
+  if assignmentCount ~= #room.players or hackerCount ~= 1 then
+    return cjson.encode({ outcome = "ROSTER_CHANGED" })
+  end
+
+  for _, player in ipairs(room.players) do
+    if roles[player.id] == nil then
+      return cjson.encode({ outcome = "ROSTER_CHANGED" })
+    end
+  end
+
+  -- Use the same clock as the private role endpoint.
+  local redisTime = redis.call("TIME")
+  local nowMs = tonumber(redisTime[1]) * 1000 +
+    math.floor(tonumber(redisTime[2]) / 1000)
+
   room.phase = "IN_PROGRESS"
-  room.countdownEndsAt = ARGV[6]
+  room.countdownEndsAt = nowMs + 10000
 
   if challenge then
     room.challenge = challenge.playerFacing
   end
 
-  redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
+  -- Starting clears the lobby expiry. Completion will set a post-game TTL.
+  redis.call("SET", KEYS[1], cjson.encode(room))
 
   if challenge then
     redis.call("SET", KEYS[3], cjson.encode(challenge.serverOnly))
@@ -553,6 +589,11 @@ const START_ROOM_SCRIPT = `
     redis.call("PEXPIRE", KEYS[4], roomTtl)
   end
 
+  -- Retain sessions, private challenge, roles, and join retry metadata too.
+  for _, key in ipairs(KEYS) do
+    redis.call("PERSIST", key)
+  end
+
   return cjson.encode({
     outcome = "STARTED",
     room = room
@@ -565,7 +606,6 @@ export async function startRoomInStore(
   expectedPlayerCount: number,
   challenge: GeneratedChallenge | null,
   roleAssignments: Record<string, GameRole>,
-  countdownEndsAt: number,
 ): Promise<StartRoomResult> {
   const result = await redis.eval(START_ROOM_SCRIPT, {
     keys: [
@@ -573,6 +613,7 @@ export async function startRoomInStore(
       sessionsKey(code),
       serverChallengeKey(code),
       playerRolesKey(code),
+      joinRequestsKey(code),
     ],
     arguments: [
       tokenHash,
@@ -580,7 +621,6 @@ export async function startRoomInStore(
       String(expectedPlayerCount),
       JSON.stringify(challenge),
       JSON.stringify(roleAssignments),
-      String(countdownEndsAt),
     ],
   });
 
@@ -595,7 +635,7 @@ export type PlayerRoleResult =
   | {
       outcome: "ROLE_READY";
       role: GameRole;
-      countdownEndsAt: string;
+      countdownEndsAt: number;
     }
   | { outcome: "NOT_FOUND" }
   | { outcome: "UNAUTHORIZED" }
@@ -627,7 +667,13 @@ const FIND_PLAYER_ROLE_SCRIPT = `
     tonumber(redisTime[1]) * 1000 +
     math.floor(tonumber(redisTime[2]) / 1000)
 
-  if nowMs < tonumber(room.countdownEndsAt) then
+  local deadline = tonumber(room.countdownEndsAt)
+  if not deadline then
+    return cjson.encode({ outcome = "ROLE_UNAVAILABLE" })
+  end
+  room.countdownEndsAt = deadline
+
+  if nowMs < deadline then
     return cjson.encode({
       outcome = "COUNTDOWN_ACTIVE",
       countdownEndsAt = room.countdownEndsAt

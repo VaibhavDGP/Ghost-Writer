@@ -8,6 +8,10 @@ interface Props {
   countdownEndsAt?: number;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  onLeave: () => void;
+  onReturnToEntry: () => void;
+  leaving: boolean;
+  roomError: string | null;
 }
 
 interface RoleResponse {
@@ -21,6 +25,10 @@ function GameStartSequence({
   countdownEndsAt,
   theme,
   onToggleTheme,
+  onLeave,
+  onReturnToEntry,
+  leaving,
+  roomError,
 }: Props) {
   const [now, setNow] = useState(Date.now());
   const [role, setRole] = useState<GameRole | null>(null);
@@ -41,7 +49,9 @@ function GameStartSequence({
     const message =
       role === "HACKER" ? "You are a Hacker" : "You Are A Coder";
     let characterIndex = 0;
-    let holdTimeout = 0;
+    const revealTimeout = window.setTimeout(() => {
+      setRevealComplete(true);
+    }, 5000);
 
     setTypedText("");
     setRevealComplete(false);
@@ -52,15 +62,13 @@ function GameStartSequence({
 
       if (characterIndex >= message.length) {
         window.clearInterval(typingInterval);
-        holdTimeout = window.setTimeout(() => {
-          setRevealComplete(true);
-        }, 5000);
+
       }
     }, 75);
 
     return () => {
       window.clearInterval(typingInterval);
-      window.clearTimeout(holdTimeout);
+      window.clearTimeout(revealTimeout);
     };
   }, [role]);
 
@@ -130,6 +138,23 @@ function GameStartSequence({
     }
   }
 
+  const roomActions = (
+    <div>
+      <button className="copy-button" type="button" onClick={onLeave} disabled={leaving}>
+        {leaving ? "LEAVING…" : "LEAVE ROOM"}
+      </button>
+      {roomError && (
+        <>
+          <p role="alert">{roomError}</p>
+          <button className="copy-button" type="button" onClick={onReturnToEntry}>
+            RETURN TO HOME
+          </button>
+          <p>Returning home only clears this device; it does not leave on the server.</p>
+        </>
+      )}
+    </div>
+  );
+
   if (role) {
     return (
       <main
@@ -153,6 +178,7 @@ function GameStartSequence({
             </p>
           </div>
         )}
+        {roomActions}
       </main>
     );
   }
@@ -262,6 +288,7 @@ function GameStartSequence({
         </aside>
       </section>
 
+      {roomActions}
       <footer className="footer">
         <span>GHOST WRITER / BUILD 001</span>
         <span>NO ONE DEBUGS ALONE</span>

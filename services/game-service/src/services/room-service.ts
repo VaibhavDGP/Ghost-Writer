@@ -216,6 +216,15 @@ export async function startRoom(
       return { outcome: "NOT_FOUND" };
     }
 
+    // Reject unauthorized requests before reading/generating challenge files.
+    const session = await findPlayerSession(code, tokenHash);
+    if (session.outcome !== "AUTHENTICATED") {
+      return { outcome: "UNAUTHORIZED" };
+    }
+    if (!session.isHost) {
+      return { outcome: "FORBIDDEN" };
+    }
+
     const challenge =
       room.phase === "IN_PROGRESS" || room.players.length < 2
         ? null
@@ -232,18 +241,15 @@ export async function startRoom(
         index === hackerIndex ? "HACKER" : "CODER";
     });
 
-    const countdownEndsAt = Date.now() + 10_000;
-
     const result = await startRoomInStore(
       code,
       tokenHash,
       room.players.length,
       challenge,
       roleAssignments,
-      countdownEndsAt,
     );
 
-    if (result.outcome !== "PLAYER_COUNT_CHANGED") {
+    if (result.outcome !== "ROSTER_CHANGED") {
       return result;
     }
   }

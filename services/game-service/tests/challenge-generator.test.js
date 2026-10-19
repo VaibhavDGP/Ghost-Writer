@@ -103,3 +103,19 @@ test("rejects player counts without a generation rule", async () => {
     /No generation rule for 9 players/,
   );
 });
+
+
+test("a saved seed reproduces the challenge but not its match identity", async () => {
+  const first = await generateChallenge(templateDirectory, 4, "replay-seed-1");
+  const second = await generateChallenge(templateDirectory, 4, first.serverOnly.seed);
+  const { matchId: firstId, ...firstPublic } = first.playerFacing;
+  const { matchId: secondId, ...secondPublic } = second.playerFacing;
+  assert.notEqual(firstId, secondId);
+  assert.deepEqual(firstPublic, secondPublic);
+  assert.deepEqual(first.serverOnly, second.serverOnly);
+});
+
+test("rejects invalid seeds and fractional player counts", async () => {
+  await assert.rejects(generateChallenge(templateDirectory, 4, ""), /Seed/);
+  await assert.rejects(generateChallenge(templateDirectory, 2.5), /integer/);
+});
