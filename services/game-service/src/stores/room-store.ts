@@ -1,5 +1,6 @@
 import { redis } from "../config/redis.js";
 import type { GeneratedChallenge } from "../services/challenge-generator.js";
+import type { GameRole } from "../types/room.js";
 import type { Player , Room } from "../types/room.js";
 
 // Starter policy: rooms expire one hour after creation.
@@ -11,6 +12,10 @@ function roomKey(code: string): string {
 
 function serverChallengeKey(code: string): string {
   return `ghost-writer:room:${code}:server-challenge`;
+}
+
+function playerRolesKey(code: string): string {
+  return `ghost-writer:room:${code}:player-roles`;
 }
 
 export async function saveNewRoom(room: Room): Promise<boolean> {
@@ -149,7 +154,7 @@ const CREATE_ROOM_WITH_SESSION_SCRIPT = `
 
   -- A code might be reused after an older room expires.
   -- Remove any leftover metadata belonging to that older room.
-  redis.call("DEL", KEYS[2], KEYS[3])
+  redis.call("DEL", KEYS[2], KEYS[3], KEYS[4])
 
   redis.call("HSET", KEYS[2], ARGV[2], room.hostPlayerId)
 
@@ -167,10 +172,11 @@ export async function saveNewRoomWithSession(
     CREATE_ROOM_WITH_SESSION_SCRIPT,
     {
       keys: [
-        roomKey(room.code),
-        sessionsKey(room.code),
-        joinRequestsKey(room.code),
-      ],
+  roomKey(room.code),
+  sessionsKey(room.code),
+  joinRequestsKey(room.code),
+  playerRolesKey(room.code),
+],
       arguments: [
         JSON.stringify(room),
         tokenHash,
@@ -484,7 +490,6 @@ const START_ROOM_SCRIPT = `
     return cjson.encode({ outcome = "FORBIDDEN" })
   end
 
-  -- A retry from the host must not restart the game.
   if room.phase == "IN_PROGRESS" then
     return cjson.encode({
       outcome = "STARTED",
@@ -502,7 +507,7 @@ const START_ROOM_SCRIPT = `
     return cjson.encode({ outcome = "NOT_ENOUGH_PLAYERS" })
   end
 
-    local expectedPlayerCount = tonumber(ARGV[3])
+  local expectedPlayerCount = tonumber(ARGV[3])
 
   if #room.players ~= expectedPlayerCount then
     return cjson.encode({ outcome = "PLAYER_COUNT_CHANGED" })
@@ -514,9 +519,11 @@ const START_ROOM_SCRIPT = `
     end
   end
 
-    local challenge = cjson.decode(ARGV[4])
+  local challenge = cjson.decode(ARGV[4])
+  local roles = cjson.decode(ARGV[5])
 
   room.phase = "IN_PROGRESS"
+  room.countdownEndsAt = ARGV[6]
 
   if challenge then
     room.challenge = challenge.playerFacing
@@ -534,6 +541,18 @@ const START_ROOM_SCRIPT = `
     end
   end
 
+  redis.call("DEL", KEYS[4])
+
+  for assignedPlayerId, role in pairs(roles) do
+    redis.call("HSET", KEYS[4], assignedPlayerId, role)
+  end
+
+  local roomTtl = redis.call("PTTL", KEYS[1])
+
+  if roomTtl >= 0 then
+    redis.call("PEXPIRE", KEYS[4], roomTtl)
+  end
+
   return cjson.encode({
     outcome = "STARTED",
     room = room
@@ -545,18 +564,23 @@ export async function startRoomInStore(
   tokenHash: string,
   expectedPlayerCount: number,
   challenge: GeneratedChallenge | null,
+  roleAssignments: Record<string, GameRole>,
+  countdownEndsAt: number,
 ): Promise<StartRoomResult> {
   const result = await redis.eval(START_ROOM_SCRIPT, {
     keys: [
       roomKey(code),
       sessionsKey(code),
       serverChallengeKey(code),
+      playerRolesKey(code),
     ],
     arguments: [
       tokenHash,
       String(MIN_PLAYERS_TO_START),
       String(expectedPlayerCount),
       JSON.stringify(challenge),
+      JSON.stringify(roleAssignments),
+      String(countdownEndsAt),
     ],
   });
 
@@ -565,6 +589,82 @@ export async function startRoomInStore(
   }
 
   return JSON.parse(result) as StartRoomResult;
+}
+
+export type PlayerRoleResult =
+  | {
+      outcome: "ROLE_READY";
+      role: GameRole;
+      countdownEndsAt: string;
+    }
+  | { outcome: "NOT_FOUND" }
+  | { outcome: "UNAUTHORIZED" }
+  | { outcome: "NOT_STARTED" }
+    | { outcome: "COUNTDOWN_ACTIVE"; countdownEndsAt: number }
+  | { outcome: "ROLE_UNAVAILABLE" };
+
+const FIND_PLAYER_ROLE_SCRIPT = `
+  local data = redis.call("GET", KEYS[1])
+
+  if not data then
+    return cjson.encode({ outcome = "NOT_FOUND" })
+  end
+
+  local playerId = redis.call("HGET", KEYS[2], ARGV[1])
+
+  if not playerId then
+    return cjson.encode({ outcome = "UNAUTHORIZED" })
+  end
+
+  local room = cjson.decode(data)
+
+      if room.phase ~= "IN_PROGRESS" then
+    return cjson.encode({ outcome = "NOT_STARTED" })
+  end
+
+  local redisTime = redis.call("TIME")
+  local nowMs =
+    tonumber(redisTime[1]) * 1000 +
+    math.floor(tonumber(redisTime[2]) / 1000)
+
+  if nowMs < tonumber(room.countdownEndsAt) then
+    return cjson.encode({
+      outcome = "COUNTDOWN_ACTIVE",
+      countdownEndsAt = room.countdownEndsAt
+    })
+  end
+
+  local role = redis.call("HGET", KEYS[3], playerId)
+
+  if not role then
+    return cjson.encode({ outcome = "ROLE_UNAVAILABLE" })
+  end
+
+  return cjson.encode({
+    outcome = "ROLE_READY",
+    role = role,
+    countdownEndsAt = room.countdownEndsAt
+  })
+`;
+
+export async function findPlayerRole(
+  code: string,
+  tokenHash: string,
+): Promise<PlayerRoleResult> {
+  const result = await redis.eval(FIND_PLAYER_ROLE_SCRIPT, {
+    keys: [
+      roomKey(code),
+      sessionsKey(code),
+      playerRolesKey(code),
+    ],
+    arguments: [tokenHash],
+  });
+
+  if (typeof result !== "string") {
+    throw new Error("Unexpected Redis player-role response.");
+  }
+
+  return JSON.parse(result) as PlayerRoleResult;
 }
 
 export type LeaveRoomResult =
@@ -601,7 +701,7 @@ const LEAVE_ROOM_SCRIPT = `
   end
 
   if room.hostPlayerId == playerId then
-   redis.call("DEL", KEYS[1], KEYS[2], KEYS[3], KEYS[4])
+   redis.call("DEL", KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5])
 
     return cjson.encode({
       outcome = "ROOM_CLOSED",
@@ -613,6 +713,7 @@ const LEAVE_ROOM_SCRIPT = `
 
   redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
   redis.call("HDEL", KEYS[2], ARGV[1])
+  redis.call("HDEL", KEYS[5], playerId)
 
   return cjson.encode({
     outcome = "LEFT",
@@ -627,11 +728,12 @@ export async function leaveRoomInStore(
 ): Promise<LeaveRoomResult> {
   const result = await redis.eval(LEAVE_ROOM_SCRIPT, {
     keys: [
-        roomKey(code),
-        sessionsKey(code),
-        joinRequestsKey(code),
-        serverChallengeKey(code),
-    ],
+  roomKey(code),
+  sessionsKey(code),
+  joinRequestsKey(code),
+  serverChallengeKey(code),
+  playerRolesKey(code),
+],
     arguments: [tokenHash],
   });
 

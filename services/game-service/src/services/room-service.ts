@@ -1,8 +1,8 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateChallenge } from "./challenge-generator.js";
-import { randomBytes, randomUUID } from "node:crypto";
-import type { Player , Room } from "../types/room.js";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import type { GameRole, Player, Room } from "../types/room.js";
 import {
   findRoomByCode,
   saveNewRoom,
@@ -12,6 +12,7 @@ import {
   setPlayerReadyInRoom,
   saveNewRoomWithSession,
   findPlayerSession,
+   findPlayerRole,
   addPlayerToRoomWithSession,
 } from "../stores/room-store.js";
 
@@ -21,7 +22,8 @@ import type {
   LeaveRoomResult,
   PlayerSessionResult,
   SetPlayerReadyResult,
-  JoinRoomWithSessionResult,
+   JoinRoomWithSessionResult,
+  PlayerRoleResult,
 } from "../stores/room-store.js";
 
 import {
@@ -142,6 +144,17 @@ export async function getPlayerSession(
   );
 }
 
+export async function getPlayerRole(
+  code: string,
+  sessionToken: string,
+): Promise<PlayerRoleResult> {
+  if (!isSessionToken(sessionToken)) {
+    return { outcome: "UNAUTHORIZED" };
+  }
+
+  return findPlayerRole(code, hashSessionToken(sessionToken));
+}
+
 export async function joinRoomWithSession(
   code: string,
   displayName: string,
@@ -204,18 +217,30 @@ export async function startRoom(
     }
 
     const challenge =
-  room.phase === "IN_PROGRESS" || room.players.length < 2
-    ? null
-    : await generateChallenge(
-        challengePackageDirectory,
-        room.players.length,
-      );
+      room.phase === "IN_PROGRESS" || room.players.length < 2
+        ? null
+        : await generateChallenge(
+            challengePackageDirectory,
+            room.players.length,
+          );
+
+    const hackerIndex = randomInt(room.players.length);
+    const roleAssignments: Record<string, GameRole> = {};
+
+    room.players.forEach((player, index) => {
+      roleAssignments[player.id] =
+        index === hackerIndex ? "HACKER" : "CODER";
+    });
+
+    const countdownEndsAt = Date.now() + 10_000;
 
     const result = await startRoomInStore(
       code,
       tokenHash,
       room.players.length,
       challenge,
+      roleAssignments,
+      countdownEndsAt,
     );
 
     if (result.outcome !== "PLAYER_COUNT_CHANGED") {

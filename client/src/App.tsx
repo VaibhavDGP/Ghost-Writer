@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
+import GameStartSequence from "./GameStartSequence";
 
 type Theme = "light" | "dark";
 type Action = "create" | "join";
@@ -14,6 +15,7 @@ interface Room {
   code: string;
   hostPlayerId: string;
   phase: "LOBBY" | "IN_PROGRESS";
+  countdownEndsAt?: number;
   players: Player[];
   maxPlayers: number;
 }
@@ -344,6 +346,17 @@ function App() {
       allGuestsReady &&
       room.phase === "LOBBY",
   );
+
+  if (roomCode && playerId && room?.phase === "IN_PROGRESS") {
+  return (
+    <GameStartSequence
+      roomCode={roomCode}
+      countdownEndsAt={room.countdownEndsAt}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    />
+  );
+}
 
   if (roomCode && playerId) {
     return (

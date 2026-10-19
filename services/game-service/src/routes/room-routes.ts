@@ -5,6 +5,7 @@ import {
   getPlayerSession,
   startRoom,
   leaveRoom,
+  getPlayerRole,
   setPlayerReady,
   joinRoomWithSession,
 } from "../services/room-service.js";
@@ -240,6 +241,72 @@ roomRouter.get("/:code/me", async (req, res) => {
     res.status(500).json({
       error: "Failed to look up player session.",
     });
+  }
+});
+
+// GET /rooms/:code/me/role
+roomRouter.get("/:code/me/role", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  const code = req.params.code.trim().toUpperCase();
+
+  if (!/^[0-9A-F]{6}$/.test(code)) {
+    res.status(400).json({
+      error: "Room code must contain 6 hexadecimal characters.",
+    });
+    return;
+  }
+
+  const sessionToken = readBearerToken(req.get("Authorization"));
+
+  if (sessionToken === null) {
+    res.set("WWW-Authenticate", "Bearer");
+    res.status(401).json({
+      error: "A valid session token is required.",
+    });
+    return;
+  }
+
+  try {
+    const result = await getPlayerRole(code, sessionToken);
+
+    switch (result.outcome) {
+      case "NOT_FOUND":
+        res.status(404).json({ error: "Room not found or expired." });
+        return;
+
+      case "UNAUTHORIZED":
+        res.set("WWW-Authenticate", "Bearer");
+        res.status(401).json({
+          error: "Invalid or expired player session.",
+        });
+        return;
+
+      case "NOT_STARTED":
+        res.status(409).json({ error: "The game has not started." });
+        return;
+
+      case "ROLE_UNAVAILABLE":
+        res.status(409).json({ error: "Your role is not available yet." });
+        return;
+
+      case "COUNTDOWN_ACTIVE":
+        res.status(409).json({
+          error: "The reveal is not available yet.",
+          countdownEndsAt: result.countdownEndsAt,
+        });
+        return;
+
+      case "ROLE_READY":
+        res.status(200).json({
+          role: result.role,
+          countdownEndsAt: result.countdownEndsAt,
+        });
+        return;
+    }
+  } catch (error) {
+    console.error("Failed to fetch player role:", error);
+    res.status(500).json({ error: "Failed to fetch player role." });
   }
 });
 

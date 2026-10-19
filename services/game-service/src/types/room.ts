@@ -1,5 +1,7 @@
 import type { GeneratedChallenge } from "../services/challenge-generator.js";
 
+export type GameRole = "CODER" | "HACKER";
+
 export interface Player {
   id: string;
   displayName: string;
@@ -15,5 +17,6 @@ export interface Room {
   players: Player[];
   maxPlayers: number;
   createdAt: string;
+  countdownEndsAt?: number;
   challenge?: GeneratedChallenge["playerFacing"];
 }
