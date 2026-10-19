@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./GameStartSequence.css";
+import GameWorkspace from "./GameWorkspace";
 
 type GameRole = "CODER" | "HACKER";
 
@@ -154,6 +155,22 @@ function GameStartSequence({
       )}
     </div>
   );
+
+    if (role && revealComplete) {
+    return (
+      <GameWorkspace
+        key={roomCode}
+        roomCode={roomCode}
+        role={role}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+        onLeave={onLeave}
+        onReturnToEntry={onReturnToEntry}
+        leaving={leaving}
+        roomError={roomError}
+      />
+    );
+  }
 
   if (role) {
     return (

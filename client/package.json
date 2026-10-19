@@ -11,6 +11,8 @@
     "test": "node --experimental-strip-types --test tests/*.test.js"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "monaco-editor": "^0.57.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
