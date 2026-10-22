@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import "./monaco-setup";
 import "./GameWorkspace.css";
+import SubmitRepairButton from "./SubmitRepairButton";
 
 interface Objective {
   id: string;
@@ -22,6 +23,8 @@ interface Challenge {
   language: "cpp";
   source: string;
   sourceHash: string;
+  codeVersion: number;
+  completedObjectiveIds: string[];
   objectives: Objective[];
   publicTests: PublicTest[];
 }
@@ -96,6 +99,7 @@ interface DraftProps {
   challenge: Challenge;
   storageKey: string;
   theme: "light" | "dark";
+  role: "CODER" | "HACKER";
 }
 
 const STATUS_LABELS: Record<TestStatus, string> = {
@@ -137,8 +141,8 @@ function RunResults({
 
       {outdated && (
         <p className="gw-warning" role="status">
-          Your draft has changed. These results belong to the code
-          you sent earlier. Run again to check the current draft.
+          Your draft has changed. These results belong to the code you sent
+          earlier. Run again to check the current draft.
         </p>
       )}
 
@@ -147,9 +151,7 @@ function RunResults({
           <p className="gw-result-summary gw-result-failed">
             Compilation failed
           </p>
-
           <p>{result.message}</p>
-
           <pre className="gw-run-output">
             {result.compilerOutput || "No compiler diagnostics were returned."}
           </pre>
@@ -203,8 +205,9 @@ function RunResults({
       )}
 
       <p className="gw-muted">
-        Public tests are a preview. Passing them does not verify all
-        objectives or submit a repair. The official program is unchanged.
+        Public tests are a preview. Passing them does not verify all objectives
+        or submit a repair. The official program is unchanged until a repair is
+        accepted.
       </p>
     </section>
   );
@@ -215,6 +218,7 @@ function DraftEditor({
   challenge,
   storageKey,
   theme,
+  role,
 }: DraftProps) {
   const [initialDraft] = useState(() =>
     readSavedDraft(storageKey, challenge.source),
@@ -266,7 +270,6 @@ function DraftEditor({
   }
 
   async function runDraft() {
-    // Prevent duplicate requests even before React updates the button.
     if (activeRequest.current) return;
 
     setRunError(null);
@@ -282,7 +285,6 @@ function DraftEditor({
       return;
     }
 
-    // Capture exactly the source that this run will evaluate.
     const submittedSource = draft;
     const controller = new AbortController();
 
@@ -328,7 +330,6 @@ function DraftEditor({
 
       if (!response.ok) {
         const retryAfter = response.headers.get("Retry-After");
-
         const retryMessage =
           response.status === 429 && retryAfter
             ? ` Retry after about ${retryAfter} seconds.`
@@ -342,10 +343,8 @@ function DraftEditor({
       if (
         data.matchId !== challenge.matchId ||
         !data.result ||
-        (
-          data.result.status !== "COMPLETED" &&
-          data.result.status !== "COMPILE_ERROR"
-        )
+        (data.result.status !== "COMPLETED" &&
+          data.result.status !== "COMPILE_ERROR")
       ) {
         throw new Error("The server returned an invalid run result.");
       }
@@ -357,7 +356,6 @@ function DraftEditor({
         });
       }
     } catch (error) {
-      // Ignore a response after leaving this workspace.
       if (activeRequest.current !== controller) return;
 
       setRunError(
@@ -403,12 +401,21 @@ function DraftEditor({
           >
             {running ? "RUNNING…" : "RUN PUBLIC TESTS"}
           </button>
+
+          {role === "CODER" && (
+            <SubmitRepairButton
+              roomCode={roomCode}
+              matchId={challenge.matchId}
+              codeVersion={challenge.codeVersion}
+              source={draft}
+            />
+          )}
         </div>
       </div>
 
       <p className="gw-editor-note">
-        Run sends a snapshot of your draft to the judge. It does not
-        change the official program or another player’s draft.
+        Run checks a private draft. Submit Repair checks trusted tests and
+        updates the official code if it advances the repair objectives.
       </p>
 
       <div className="gw-editor-container">
@@ -447,10 +454,7 @@ function DraftEditor({
             ? "Draft differs from official code"
             : "Draft matches official code"}
         </span>
-
-        <span>
-          {storageError ? "Draft not saved" : "Tab autosave enabled"}
-        </span>
+        <span>{storageError ? "Draft not saved" : "Tab autosave enabled"}</span>
       </div>
 
       {storageError && (
@@ -471,9 +475,7 @@ function DraftEditor({
         </p>
       )}
 
-      {lastRun && (
-        <RunResults run={lastRun} currentDraft={draft} />
-      )}
+      {lastRun && <RunResults run={lastRun} currentDraft={draft} />}
     </section>
   );
 }
@@ -521,9 +523,7 @@ export default function GameWorkspace({
         const result = (await response.json()) as RoomResponse;
 
         if (!response.ok) {
-          throw new Error(
-            result.error ?? "Could not load the challenge.",
-          );
+          throw new Error(result.error ?? "Could not load the challenge.");
         }
 
         if (
@@ -542,11 +542,13 @@ export default function GameWorkspace({
           typeof challenge.matchId !== "string" ||
           typeof challenge.source !== "string" ||
           typeof challenge.sourceHash !== "string" ||
+          typeof challenge.codeVersion !== "number" ||
+          !Array.isArray(challenge.completedObjectiveIds) ||
           !Array.isArray(challenge.objectives) ||
           !Array.isArray(challenge.publicTests)
         ) {
           throw new Error(
-            "The room has no valid generated challenge. Try starting a fresh room.",
+            "The room has no valid generated challenge. Start a fresh match.",
           );
         }
 
@@ -583,7 +585,9 @@ export default function GameWorkspace({
     <main className="page-shell gw-workspace">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">GW</span>
+          <span className="brand-mark" aria-hidden="true">
+            GW
+          </span>
           <span>GHOST WRITER</span>
         </div>
 
@@ -616,9 +620,7 @@ export default function GameWorkspace({
         </div>
 
         <p
-          className={`gw-role-badge ${
-            role === "HACKER" ? "gw-role-hacker" : ""
-          }`}
+          className={`gw-role-badge ${role === "HACKER" ? "gw-role-hacker" : ""}`}
         >
           YOUR ROLE: {role}
         </p>
@@ -653,35 +655,41 @@ export default function GameWorkspace({
             storageKey={storageKey}
             challenge={loaded.challenge}
             theme={theme}
+            role={role}
           />
 
           <aside className="gw-challenge-sidebar">
             <section className="gw-info-panel">
               <h2>Repair objectives</h2>
-
               <p className="gw-muted">
-                Use these requirements to investigate the program.
-                Public test results do not verify objective completion.
+                Submit a repair to check objectives against trusted tests.
+                Completed objectives are saved with the official code.
               </p>
 
               <ul className="gw-objective-list">
-                {loaded.challenge.objectives.map((objective) => (
-                  <li key={objective.id}>
-                    <p>{objective.description}</p>
-                    <small>
-                      {objective.required ? "Required" : "Optional"}
-                    </small>
-                  </li>
-                ))}
+                {loaded.challenge.objectives.map((objective) => {
+                  const complete =
+                    loaded.challenge.completedObjectiveIds.includes(
+                      objective.id,
+                    );
+
+                  return (
+                    <li key={objective.id}>
+                      <p>{objective.description}</p>
+                      <small>
+                        {complete ? "Complete" : objective.required ? "Required" : "Optional"}
+                      </small>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
 
             <section className="gw-info-panel">
               <h2>Public test examples</h2>
-
               <p className="gw-muted">
-                Expected inputs and outputs. Your execution results
-                appear below the editor.
+                Expected inputs and outputs. Run results appear below the
+                editor.
               </p>
 
               {loaded.challenge.publicTests.map((testCase) => (
@@ -708,8 +716,8 @@ export default function GameWorkspace({
             RETURN TO HOME
           </button>
           <p className="gw-muted">
-            This clears your local room selection. Use Leave Room
-            to leave on the server.
+            This clears your local room selection. Use Leave Room to leave on
+            the server.
           </p>
         </div>
       )}

@@ -1,23 +1,17 @@
 import { Router } from "express";
 import { judgePublicDraft } from "../../../../workers/code-judge/judge.mjs";
-
+import { acquireJudgeSlot } from "../services/judge-slot.js";
 import {
   getPlayerRole,
   getPlayerSession,
   getRoomByCode,
 } from "../services/room-service.js";
-
 import { readBearerToken } from "../services/session-service.js";
 
 export const runRouter = Router();
 
 const MAX_SOURCE_BYTES = 64 * 1024;
 const RUN_COOLDOWN_MS = 5000;
-
-// Development limit for ONE game-service process.
-// A shared queue will replace this when we scale to multiple processes.
-let judgeBusy = false;
-
 const nextRunAt = new Map<string, number>();
 
 runRouter.post("/:code/run", async (req, res) => {
@@ -44,11 +38,7 @@ runRouter.post("/:code/run", async (req, res) => {
 
   const body: unknown = req.body;
 
-  if (
-    body === null ||
-    typeof body !== "object" ||
-    Array.isArray(body)
-  ) {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
     res.status(400).json({
       error: "A JSON object containing source and matchId is required.",
     });
@@ -57,7 +47,6 @@ runRouter.post("/:code/run", async (req, res) => {
 
   const payload = body as Record<string, unknown>;
 
-  // Players cannot supply test cases or compiler options.
   if (
     Object.keys(payload).some(
       (key) => key !== "source" && key !== "matchId",
@@ -95,7 +84,7 @@ runRouter.post("/:code/run", async (req, res) => {
     return;
   }
 
-  let ownsJudgeSlot = false;
+  let releaseJudgeSlot: (() => void) | null = null;
 
   try {
     const session = await getPlayerSession(code, sessionToken);
@@ -131,8 +120,6 @@ runRouter.post("/:code/run", async (req, res) => {
       return;
     }
 
-    // This uses the existing Redis-backed countdown gate.
-    // Both coders and hackers may preview a private draft.
     const role = await getPlayerRole(code, sessionToken);
 
     if (role.outcome !== "ROLE_READY") {
@@ -143,21 +130,19 @@ runRouter.post("/:code/run", async (req, res) => {
     }
 
     const rateLimitKey = `${session.roomId}:${session.player.id}`;
-    const remainingMs =
-      (nextRunAt.get(rateLimitKey) ?? 0) - Date.now();
+    const remainingMs = (nextRunAt.get(rateLimitKey) ?? 0) - Date.now();
 
     if (remainingMs > 0) {
-      res.set(
-        "Retry-After",
-        String(Math.ceil(remainingMs / 1000)),
-      );
+      res.set("Retry-After", String(Math.ceil(remainingMs / 1000)));
       res.status(429).json({
         error: "Please wait a few seconds before running again.",
       });
       return;
     }
 
-    if (judgeBusy) {
+    releaseJudgeSlot = acquireJudgeSlot();
+
+    if (releaseJudgeSlot === null) {
       res.set("Retry-After", "2");
       res.status(429).json({
         error: "The judge is busy. Please try again shortly.",
@@ -165,37 +150,21 @@ runRouter.post("/:code/run", async (req, res) => {
       return;
     }
 
-    // No await between checking and reserving the slot.
-    judgeBusy = true;
-    ownsJudgeSlot = true;
-
-    nextRunAt.set(
-      rateLimitKey,
-      Date.now() + RUN_COOLDOWN_MS,
-    );
+    nextRunAt.set(rateLimitKey, Date.now() + RUN_COOLDOWN_MS);
 
     setTimeout(() => {
       nextRunAt.delete(rateLimitKey);
     }, RUN_COOLDOWN_MS).unref();
 
-    // Select trusted public tests from the room snapshot.
-    // Never accept tests, executable paths, or shell commands from the client.
     const tests = room.challenge.publicTests.map((test) => ({
       id: test.id,
       input: test.input,
       expectedOutput: test.expectedOutput,
     }));
 
-    const result = await judgePublicDraft({
-      source,
-      tests,
-    });
+    const result = await judgePublicDraft({ source, tests });
 
-    // A player may leave or a room may close while Docker is running.
-    const currentSession = await getPlayerSession(
-      code,
-      sessionToken,
-    );
+    const currentSession = await getPlayerSession(code, sessionToken);
 
     if (
       currentSession.outcome !== "AUTHENTICATED" ||
@@ -220,7 +189,6 @@ runRouter.post("/:code/run", async (req, res) => {
       return;
     }
 
-    // Preview only: no room or source mutation occurs.
     res.status(200).json({
       matchId,
       result,
@@ -229,12 +197,9 @@ runRouter.post("/:code/run", async (req, res) => {
     console.error("Failed to run private draft:", error);
 
     res.status(503).json({
-      error:
-        "The code judge is unavailable. Check Docker and try again.",
+      error: "The code judge is unavailable. Check Docker and try again.",
     });
   } finally {
-    if (ownsJudgeSlot) {
-      judgeBusy = false;
-    }
+    releaseJudgeSlot?.();
   }
 });

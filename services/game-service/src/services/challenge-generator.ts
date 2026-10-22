@@ -293,6 +293,8 @@ export async function generateChallenge(
       sourceHash: createHash("sha256")
         .update(starterSource)
         .digest("hex"),
+        codeVersion: 0,
+        completedObjectiveIds: [] as string[],
       objectives: selectedObjectives.map(
         ({ id, description, required }) => ({ id, description, required }),
       ),

@@ -3,6 +3,23 @@ import type { GeneratedChallenge } from "../services/challenge-generator.js";
 import type { GameRole } from "../types/room.js";
 import type { Player , Room } from "../types/room.js";
 
+
+function parseRoomStoreResponse(data: string): unknown {
+  return JSON.parse(data, (key: string, value: unknown) => {
+    if (
+      key === "completedObjectiveIds" &&
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0
+    ) {
+      return [];
+    }
+
+    return value;
+  });
+}
+
 // Starter policy: rooms expire one hour after creation.
 const ROOM_TTL_SECONDS = 60 * 60;
 
@@ -41,10 +58,20 @@ export async function findRoomByCode(
   }
 
   const room = JSON.parse(data) as Room;
-  // Accept rooms created by the earlier version, which stored a string.
+
   if (room.countdownEndsAt !== undefined) {
     room.countdownEndsAt = Number(room.countdownEndsAt);
   }
+
+  // Redis Lua cjson can encode an empty array as {}.
+  // The workspace and submit route expect this field to be an array.
+  if (
+    room.challenge &&
+    !Array.isArray(room.challenge.completedObjectiveIds)
+  ) {
+    room.challenge.completedObjectiveIds = [];
+  }
+
   return room;
 }
 
@@ -141,7 +168,7 @@ export async function addPlayerToRoom(
     throw new Error("Unexpected response from Redis join operation.");
   }
 
-  return JSON.parse(result) as JoinRoomResult;
+  return parseRoomStoreResponse(result) as JoinRoomResult;
 }
 
 function sessionsKey(code: string): string {
@@ -254,7 +281,7 @@ export async function findPlayerSession(
     throw new Error("Unexpected Redis session response.");
   }
 
-  return JSON.parse(result) as PlayerSessionResult;
+  return parseRoomStoreResponse(result) as PlayerSessionResult;
 }
 
 export type JoinRoomWithSessionResult =
@@ -363,7 +390,7 @@ export async function addPlayerToRoomWithSession(
     throw new Error("Unexpected Redis session join response.");
   }
 
-  return JSON.parse(result) as JoinRoomWithSessionResult;
+  return parseRoomStoreResponse(result) as JoinRoomWithSessionResult;
 }
 
 export type SetPlayerReadyResult =
@@ -446,7 +473,7 @@ export async function setPlayerReadyInRoom(
     throw new Error("Unexpected Redis readiness response.");
   }
 
-  return JSON.parse(result) as SetPlayerReadyResult;
+  return parseRoomStoreResponse(result) as SetPlayerReadyResult;
 }
 
 export type StartRoomResult =
@@ -628,7 +655,7 @@ export async function startRoomInStore(
     throw new Error("Unexpected Redis start-room response.");
   }
 
-  return JSON.parse(result) as StartRoomResult;
+  return parseRoomStoreResponse(result) as StartRoomResult;
 }
 
 export type PlayerRoleResult =
@@ -710,7 +737,7 @@ export async function findPlayerRole(
     throw new Error("Unexpected Redis player-role response.");
   }
 
-  return JSON.parse(result) as PlayerRoleResult;
+  return parseRoomStoreResponse(result) as PlayerRoleResult;
 }
 
 export type LeaveRoomResult =
@@ -746,13 +773,23 @@ const LEAVE_ROOM_SCRIPT = `
     return cjson.encode({ outcome = "UNAUTHORIZED" })
   end
 
-  if room.hostPlayerId == playerId then
-   redis.call("DEL", KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5])
+    if room.hostPlayerId == playerId then
+    if room.phase == "RESULTS" and #room.players > 1 then
+      -- Keep the results screen available to the remaining players.
+      for _, player in ipairs(room.players) do
+        if player.id ~= playerId then
+          room.hostPlayerId = player.id
+          break
+        end
+      end
+    else
+      redis.call("DEL", KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5])
 
-    return cjson.encode({
-      outcome = "ROOM_CLOSED",
-      playerId = playerId
-    })
+      return cjson.encode({
+        outcome = "ROOM_CLOSED",
+        playerId = playerId
+      })
+    end
   end
 
   table.remove(room.players, playerIndex)
@@ -787,5 +824,5 @@ export async function leaveRoomInStore(
     throw new Error("Unexpected Redis leave-room response.");
   }
 
-  return JSON.parse(result) as LeaveRoomResult;
+  return parseRoomStoreResponse(result) as LeaveRoomResult;
 }

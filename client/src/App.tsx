@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
 import GameStartSequence from "./GameStartSequence";
+import MatchResults, { type MatchSummary } from "./MatchResults";
 import {
   clearPendingJoin,
   clearStoredRoom,
@@ -20,10 +21,11 @@ interface Player {
 interface Room {
   code: string;
   hostPlayerId: string;
-  phase: "LOBBY" | "IN_PROGRESS";
+  phase: "LOBBY" | "IN_PROGRESS" | "RESULTS";
   countdownEndsAt?: number;
   players: Player[];
   maxPlayers: number;
+  results?: MatchSummary;
 }
 
 interface RoomApiResponse {
@@ -375,6 +377,36 @@ function App() {
       allGuestsReady &&
       room.phase === "LOBBY",
   );
+
+    if (roomCode && playerId && room?.phase === "RESULTS") {
+    if (!room.results) {
+      return (
+        <main className="page-shell">
+          <p role="alert">The server returned incomplete match results.</p>
+          <button
+            className="copy-button"
+            type="button"
+            onClick={() => void leaveRoom()}
+            disabled={lobbyBusy !== null}
+          >
+            LEAVE ROOM
+          </button>
+        </main>
+      );
+    }
+
+    return (
+      <MatchResults
+        key={room.results.matchId}
+        roomCode={roomCode}
+        summary={room.results}
+        isHost={isHost}
+        onLeave={() => void leaveRoom()}
+        leaving={lobbyBusy === "leave"}
+        roomError={lobbyError}
+      />
+    );
+  }
 
   if (roomCode && playerId && room?.phase === "IN_PROGRESS") {
   return (

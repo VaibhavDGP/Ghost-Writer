@@ -1,8 +1,9 @@
 import express from "express";
 import { redis } from "./config/redis.js";
+import { submitRouter } from "./routes/submit-routes.js";
 import { roomRouter } from "./routes/room-routes.js";
 import { runRouter } from "./routes/run-routes.js";
-
+import { replayRouter } from "./routes/replay-routes.js";
 const app = express();
 const PORT = 3001;
 
@@ -19,6 +20,8 @@ app.get("/health", (_req, res) => {
 
 app.use("/rooms", roomRouter);
 app.use("/rooms", runRouter);
+app.use("/rooms", submitRouter);
+app.use("/rooms", replayRouter);
 
 async function startServer() {
   await redis.connect();
