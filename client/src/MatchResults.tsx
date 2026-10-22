@@ -3,6 +3,8 @@ import "./MatchResults.css";
 
 export interface MatchSummary {
   matchId: string;
+    winner: "CODERS" | "HACKER";
+  reason: "ALL_REPAIRED" | "TIME_EXPIRED";
   finishedAt: number;
   expiresAt: number;
   durationMs: number;
@@ -102,12 +104,19 @@ export default function MatchResults({
     <main className="page-shell">
       <section className="gw-results" aria-labelledby="results-title">
         <p className="eyebrow">MATCH COMPLETE / ROOM {roomCode}</p>
-        <h1 id="results-title">Code repaired.</h1>
-        <p>Every required repair objective has been completed.</p>
 
+                <h1 id="results-title">
+          {summary.winner === "HACKER" ? "Hacker wins." : "Coders win."}
+        </h1>
+
+        <p>
+          {summary.reason === "TIME_EXPIRED"
+            ? "Time ran out before every required repair was completed."
+            : "Every required repair objective was completed before the deadline."}
+        </p>
         <dl className="gw-results-stats">
           <div>
-            <dt>Time to repair</dt>
+                <dt>Match duration</dt>
             <dd>{formatDuration(summary.durationMs)}</dd>
           </div>
           <div>

@@ -138,11 +138,13 @@ export default function MatchActions({
       (view.matchId !== matchId || view.codeVersion !== codeVersion),
   );
 
-  const cooldownSeconds = Math.max(
-    0,
-    Math.ceil(
-      ((view?.cooldownRemainingMs ?? 0) - (now - receivedAt)) / 1000,
-    ),
+    const elapsedSinceRefresh = Math.max(0, now - receivedAt);
+
+  const cooldownSeconds = Math.ceil(
+    Math.max(
+      0,
+      (view?.cooldownRemainingMs ?? 0) - elapsedSinceRefresh,
+    ) / 1000,
   );
 
   async function send(request: Pending) {

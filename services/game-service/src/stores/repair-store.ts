@@ -22,6 +22,7 @@ export type SaveRepairResult =
         | "UNAUTHORIZED"
         | "NOT_STARTED"
         | "COUNTDOWN_ACTIVE"
+        | "MATCH_EXPIRED"
         | "NOT_CODER"
         | "MATCH_CHANGED"
         | "STALE_VERSION"
@@ -66,9 +67,19 @@ const SAVE_REPAIR_SCRIPT = `
   local nowMs = tonumber(redisTime[1]) * 1000 +
     math.floor(tonumber(redisTime[2]) / 1000)
 
-  local countdownEndsAt = tonumber(room.countdownEndsAt)
-  if not countdownEndsAt or nowMs < countdownEndsAt then
+    local codingStartsAt = tonumber(room.codingStartsAt)
+  local matchEndsAt = tonumber(room.matchEndsAt)
+
+  if not codingStartsAt or not matchEndsAt then
+    return cjson.encode({ outcome = "NOT_STARTED" })
+  end
+
+  if nowMs < codingStartsAt then
     return cjson.encode({ outcome = "COUNTDOWN_ACTIVE" })
+  end
+
+  if nowMs >= matchEndsAt then
+    return cjson.encode({ outcome = "MATCH_EXPIRED" })
   end
 
   local challenge = room.challenge
@@ -177,11 +188,13 @@ const SAVE_REPAIR_SCRIPT = `
     end
 
     room.phase = "RESULTS"
-    room.results = {
+        room.results = {
       matchId = challenge.matchId,
+      winner = "CODERS",
+      reason = "ALL_REPAIRED",
       finishedAt = nowMs,
       expiresAt = nowMs + 60000,
-      durationMs = math.max(0, nowMs - countdownEndsAt),
+      durationMs = math.max(0, nowMs - codingStartsAt),
       acceptedRepairs = economy.acceptedRepairs,
       successfulSabotages = economy.sabotages,
       completedObjectives = #completed,

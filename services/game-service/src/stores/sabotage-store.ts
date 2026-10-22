@@ -108,8 +108,14 @@ const SCRIPT = `
     end
   end
 
+    local codingStartsAt = tonumber(room.codingStartsAt)
+  local matchEndsAt = tonumber(room.matchEndsAt)
+
   if room.phase ~= "IN_PROGRESS" or
-     nowMs < tonumber(room.countdownEndsAt or 0) then
+     not codingStartsAt or
+     not matchEndsAt or
+     nowMs < codingStartsAt or
+     nowMs >= matchEndsAt then
     return cjson.encode({outcome="NOT_ACTIVE"})
   end
 

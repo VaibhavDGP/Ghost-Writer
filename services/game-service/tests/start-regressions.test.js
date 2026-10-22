@@ -62,7 +62,26 @@ test("start returns a numeric deadline and retains every related key", async () 
   assert.equal(result.status, 200);
   assert.equal(typeof result.body.room.countdownEndsAt, "number");
   assert.ok(Number.isFinite(result.body.room.countdownEndsAt));
-  for (const key of keys(f.code)) assert.equal(await redis.pTTL(key), -1, key);
+    const startedRoom = result.body.room;
+
+  assert.equal(
+    startedRoom.codingStartsAt,
+    startedRoom.countdownEndsAt + 5000,
+  );
+
+  assert.ok(startedRoom.matchEndsAt > startedRoom.codingStartsAt);
+
+  for (const key of keys(f.code)) {
+    const expiresAt = Number(
+      await redis.sendCommand(["PEXPIRETIME", key]),
+    );
+
+    assert.equal(
+      expiresAt,
+      startedRoom.matchEndsAt + 60_000,
+      key,
+    );
+  }
   const fetched = await request(`/rooms/${f.code}`);
   assert.equal(typeof fetched.body.room.countdownEndsAt, "number");
 });
@@ -112,4 +131,97 @@ test("same-size roster replacement rejects stale role assignments without starti
   const storedRoles = await redis.hGetAll(keys(f.code)[3]);
   assert.deepEqual(Object.keys(storedRoles).sort(), started.body.room.players.map((p) => p.id).sort());
   assert.equal(Object.values(storedRoles).filter((role) => role === "HACKER").length, 1);
+});
+
+
+test("expired matches reject repairs, show stable results, and can replay", async () => {
+  const f = await fixture();
+
+  const started = await request(
+    `/rooms/${f.code}/start`,
+    "POST",
+    undefined,
+    f.hostToken,
+  );
+
+  assert.equal(started.status, 200);
+
+  const roomKey = keys(f.code)[0];
+  const stored = JSON.parse(await redis.get(roomKey));
+  const originalMatchId = stored.challenge.matchId;
+
+  const clock = await redis.sendCommand(["TIME"]);
+  const nowMs =
+    Number(clock[0]) * 1000 + Math.floor(Number(clock[1]) / 1000);
+
+  // Move only this test room past its deadline without waiting 30 minutes.
+  stored.countdownEndsAt = nowMs - 66_000;
+  stored.codingStartsAt = nowMs - 61_000;
+  stored.matchEndsAt = nowMs - 1000;
+
+  await redis.set(roomKey, JSON.stringify(stored), {
+    PX: 60_000,
+  });
+
+  const roles = await redis.hGetAll(keys(f.code)[3]);
+
+  const coderToken =
+    roles[stored.hostPlayerId] === "CODER"
+      ? f.hostToken
+      : f.guestToken;
+
+  const { saveVerifiedRepair } = await import(
+    "../src/stores/repair-store.ts"
+  );
+
+  const rejected = await saveVerifiedRepair({
+    code: f.code,
+    tokenHash: hashSessionToken(coderToken),
+    matchId: originalMatchId,
+    baseVersion: stored.challenge.codeVersion,
+    source: stored.challenge.source,
+    sourceHash: stored.challenge.sourceHash,
+    completedObjectiveIds: stored.challenge.objectives.map(
+      (objective) => objective.id,
+    ),
+  });
+
+  assert.equal(rejected.outcome, "MATCH_EXPIRED");
+
+  const first = await request(`/rooms/${f.code}`);
+  const second = await request(`/rooms/${f.code}`);
+
+  assert.equal(first.status, 200);
+  assert.equal(first.body.room.phase, "RESULTS");
+  assert.equal(first.body.room.results.winner, "HACKER");
+  assert.equal(first.body.room.results.reason, "TIME_EXPIRED");
+  assert.equal(
+    first.body.room.results.finishedAt,
+    stored.matchEndsAt,
+  );
+  assert.equal(
+    first.body.room.results.expiresAt,
+    stored.matchEndsAt + 60_000,
+  );
+
+  // Repeated polling must not restart the results countdown.
+  assert.deepEqual(
+    second.body.room.results,
+    first.body.room.results,
+  );
+
+  const replay = await request(
+    `/rooms/${f.code}/replay`,
+    "POST",
+    { matchId: originalMatchId },
+    f.hostToken,
+  );
+
+  assert.equal(replay.status, 200);
+
+  const lobby = await request(`/rooms/${f.code}`);
+
+  assert.equal(lobby.body.room.phase, "LOBBY");
+  assert.equal(lobby.body.room.codingStartsAt, undefined);
+  assert.equal(lobby.body.room.matchEndsAt, undefined);
 });

@@ -11,11 +11,13 @@ export interface Player {
 
 export interface MatchResults {
   matchId: string;
+  winner: "CODERS" | "HACKER";
+  reason: "ALL_REPAIRED" | "TIME_EXPIRED";
   finishedAt: number;
   expiresAt: number;
   durationMs: number;
   acceptedRepairs: number;
-    successfulSabotages: number;
+  successfulSabotages: number;
   completedObjectives: number;
   totalObjectives: number;
   players: {
@@ -34,6 +36,8 @@ export interface Room {
   maxPlayers: number;
   createdAt: string;
   countdownEndsAt?: number;
+  codingStartsAt?: number;
+  matchEndsAt?: number;
   challenge?: GeneratedChallenge["playerFacing"];
   results?: MatchResults;
 }

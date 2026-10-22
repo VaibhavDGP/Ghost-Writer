@@ -2,7 +2,7 @@ import { redis } from "../config/redis.js";
 import type { GeneratedChallenge } from "../services/challenge-generator.js";
 import type { GameRole } from "../types/room.js";
 import type { Player , Room } from "../types/room.js";
-
+import { MATCH_DURATION_MS, readTimedRoom } from "./match-clock.js";
 
 function parseRoomStoreResponse(data: string): unknown {
   return JSON.parse(data, (key: string, value: unknown) => {
@@ -51,29 +51,11 @@ export async function saveNewRoom(room: Room): Promise<boolean> {
 export async function findRoomByCode(
   code: string,
 ): Promise<Room | null> {
-  const data = await redis.get(roomKey(code));
-
-  if (data === null) {
-    return null;
-  }
-
-  const room = JSON.parse(data) as Room;
-
-  if (room.countdownEndsAt !== undefined) {
-    room.countdownEndsAt = Number(room.countdownEndsAt);
-  }
-
-  // Redis Lua cjson can encode an empty array as {}.
-  // The workspace and submit route expect this field to be an array.
-  if (
-    room.challenge &&
-    !Array.isArray(room.challenge.completedObjectiveIds)
-  ) {
-    room.challenge.completedObjectiveIds = [];
-  }
-
-  return room;
+  const snapshot = await readTimedRoom(code);
+  return snapshot.room;
 }
+
+  
 
 export type JoinRoomResult =
   | { outcome: "JOINED"; room: Room; playerId: string }
@@ -584,8 +566,10 @@ const START_ROOM_SCRIPT = `
   local nowMs = tonumber(redisTime[1]) * 1000 +
     math.floor(tonumber(redisTime[2]) / 1000)
 
-  room.phase = "IN_PROGRESS"
+    room.phase = "IN_PROGRESS"
   room.countdownEndsAt = nowMs + 10000
+  room.codingStartsAt = room.countdownEndsAt + 5000
+  room.matchEndsAt = room.codingStartsAt + tonumber(ARGV[6])
 
   if challenge then
     room.challenge = challenge.playerFacing
@@ -616,9 +600,10 @@ const START_ROOM_SCRIPT = `
     redis.call("PEXPIRE", KEYS[4], roomTtl)
   end
 
-  -- Retain sessions, private challenge, roles, and join retry metadata too.
+    -- Keep every room key until the match deadline plus the results window.
+  -- This replaces the old lobby expiry and also cleans up abandoned matches.
   for _, key in ipairs(KEYS) do
-    redis.call("PERSIST", key)
+    redis.call("PEXPIREAT", key, room.matchEndsAt + 60000)
   end
 
   return cjson.encode({
@@ -642,12 +627,13 @@ export async function startRoomInStore(
       playerRolesKey(code),
       joinRequestsKey(code),
     ],
-    arguments: [
+        arguments: [
       tokenHash,
       String(MIN_PLAYERS_TO_START),
       String(expectedPlayerCount),
       JSON.stringify(challenge),
       JSON.stringify(roleAssignments),
+      String(MATCH_DURATION_MS),
     ],
   });
 

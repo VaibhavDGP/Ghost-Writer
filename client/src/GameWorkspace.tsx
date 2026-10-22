@@ -4,6 +4,7 @@ import "./monaco-setup";
 import "./GameWorkspace.css";
 import SubmitRepairButton from "./SubmitRepairButton";
 import MatchActions from "./MatchActions";
+import MatchClock from "./MatchClock";
 
 interface Objective {
   id: string;
@@ -660,6 +661,7 @@ export default function GameWorkspace({
           />
 
           <aside className="gw-challenge-sidebar">
+                        <MatchClock roomCode={roomCode} />
                         <MatchActions
               key={loaded.challenge.matchId}
               roomCode={roomCode}

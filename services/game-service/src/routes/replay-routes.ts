@@ -57,6 +57,8 @@ const REPLAY_SCRIPT = `
   room.challenge = nil
   room.results = nil
   room.countdownEndsAt = nil
+    room.codingStartsAt = nil
+  room.matchEndsAt = nil
 
   for _, player in ipairs(room.players) do
     player.isReady = false
