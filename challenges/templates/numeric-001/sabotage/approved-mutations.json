@@ -1,29 +1,26 @@
 [
   {
-    "id": "sabotage-clamp-lower-bound",
-    "functionId": "clamp-value",
-    "objectiveId": "clamp-boundaries",
-    "type": "exact-source-replacement",
-    "from": "if (value < lower) return lower;",
-    "to": "if (value < lower) return upper;",
-    "tokenCost": 1
-  },
-  {
     "id": "sabotage-sum-digits",
-    "functionId": "sum-digits",
+    "label": "Subtract digit contributions",
+    "functionName": "sumDigits",
     "objectiveId": "digit-sum",
-    "type": "exact-source-replacement",
-    "from": "while (value > 0) {",
-    "to": "while (value > 10) {",
-    "tokenCost": 1
+    "from": "sum += value % 10",
+    "to": "sum -= value % 10"
   },
   {
-    "id": "sabotage-count-zero",
-    "functionId": "count-digits",
+    "id": "sabotage-count-digits",
+    "label": "Overcount digit positions",
+    "functionName": "countDigits",
     "objectiveId": "digit-count",
-    "type": "exact-source-replacement",
-    "from": "if (value == 0) return 1;",
-    "to": "if (value == 0) return 0;",
-    "tokenCost": 1
+    "from": "++count",
+    "to": "count += 2"
+  },
+  {
+    "id": "sabotage-clamp-boundary",
+    "label": "Reverse the upper-bound comparison",
+    "functionName": "clampValue",
+    "objectiveId": "clamp-boundaries",
+    "from": "value > upper",
+    "to": "value < upper"
   }
 ]

@@ -15,6 +15,7 @@ export interface MatchResults {
   expiresAt: number;
   durationMs: number;
   acceptedRepairs: number;
+    successfulSabotages: number;
   completedObjectives: number;
   totalObjectives: number;
   players: {

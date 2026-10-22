@@ -7,6 +7,7 @@ export interface MatchSummary {
   expiresAt: number;
   durationMs: number;
   acceptedRepairs: number;
+    successfulSabotages: number;
   completedObjectives: number;
   totalObjectives: number;
   players: {
@@ -112,6 +113,10 @@ export default function MatchResults({
           <div>
             <dt>Accepted repairs</dt>
             <dd>{summary.acceptedRepairs}</dd>
+          </div>
+                    <div>
+            <dt>Successful sabotages</dt>
+            <dd>{summary.successfulSabotages ?? 0}</dd>
           </div>
           <div>
             <dt>Objectives completed</dt>

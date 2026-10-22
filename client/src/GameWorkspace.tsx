@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react";
 import "./monaco-setup";
 import "./GameWorkspace.css";
 import SubmitRepairButton from "./SubmitRepairButton";
+import MatchActions from "./MatchActions";
 
 interface Objective {
   id: string;
@@ -659,6 +660,13 @@ export default function GameWorkspace({
           />
 
           <aside className="gw-challenge-sidebar">
+                        <MatchActions
+              key={loaded.challenge.matchId}
+              roomCode={roomCode}
+              matchId={loaded.challenge.matchId}
+              codeVersion={loaded.challenge.codeVersion}
+              role={role}
+            />
             <section className="gw-info-panel">
               <h2>Repair objectives</h2>
               <p className="gw-muted">

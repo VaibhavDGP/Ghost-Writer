@@ -4,6 +4,7 @@ import { submitRouter } from "./routes/submit-routes.js";
 import { roomRouter } from "./routes/room-routes.js";
 import { runRouter } from "./routes/run-routes.js";
 import { replayRouter } from "./routes/replay-routes.js";
+import { sabotageRouter } from "./routes/sabotage-routes.js";
 const app = express();
 const PORT = 3001;
 
@@ -22,6 +23,7 @@ app.use("/rooms", roomRouter);
 app.use("/rooms", runRouter);
 app.use("/rooms", submitRouter);
 app.use("/rooms", replayRouter);
+app.use("/rooms", sabotageRouter);
 
 async function startServer() {
   await redis.connect();

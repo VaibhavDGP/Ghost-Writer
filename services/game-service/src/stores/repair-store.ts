@@ -116,10 +116,42 @@ const SAVE_REPAIR_SCRIPT = `
     return cjson.encode({ outcome = "NO_PROGRESS" })
   end
 
+    local privateRaw = redis.call("GET", KEYS[4])
+
+  if not privateRaw then
+    return cjson.encode({ outcome = "NOT_STARTED" })
+  end
+
+  local private = cjson.decode(privateRaw)
+
+  local economy = private.sabotage or {
+    tokens = 3,
+    nextAllowedAt = 0,
+    verified = {},
+    receipts = {},
+    acceptedRepairs = currentVersion,
+    sabotages = 0,
+    attemptAfter = 0
+  }
+
+  -- Historical protection survives a later sabotage.
+  for _, objectiveId in ipairs(challenge.completedObjectiveIds or {}) do
+    economy.verified[objectiveId] = true
+  end
+
+  for _, objectiveId in ipairs(completed) do
+    economy.verified[objectiveId] = true
+  end
+
+  economy.acceptedRepairs = economy.acceptedRepairs + 1
+  private.sabotage = economy
+
   challenge.source = ARGV[4]
   challenge.sourceHash = ARGV[5]
   challenge.completedObjectiveIds = completed
   challenge.codeVersion = currentVersion + 1
+
+  redis.call("SET", KEYS[4], cjson.encode(private), "KEEPTTL")
 
   local requiredCount = 0
   local allRequiredComplete = true
@@ -150,7 +182,8 @@ const SAVE_REPAIR_SCRIPT = `
       finishedAt = nowMs,
       expiresAt = nowMs + 60000,
       durationMs = math.max(0, nowMs - countdownEndsAt),
-      acceptedRepairs = challenge.codeVersion,
+      acceptedRepairs = economy.acceptedRepairs,
+      successfulSabotages = economy.sabotages,
       completedObjectives = #completed,
       totalObjectives = #challenge.objectives,
       players = resultPlayers
