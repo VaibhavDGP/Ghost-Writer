@@ -7,12 +7,16 @@ export interface Player {
   displayName: string;
   joinedAt: string;
   isReady?: boolean;
+  eliminated?: boolean;
 }
 
 export interface MatchResults {
   matchId: string;
   winner: "CODERS" | "HACKER";
-  reason: "ALL_REPAIRED" | "TIME_EXPIRED";
+  reason:
+    | "ALL_REPAIRED"
+    | "TIME_EXPIRED"
+    | "HACKER_ELIMINATED";
   finishedAt: number;
   expiresAt: number;
   durationMs: number;
@@ -37,17 +41,32 @@ export interface Room {
   createdAt: string;
   countdownEndsAt?: number;
   codingStartsAt?: number;
-    matchEndsAt?: number;
-
+  matchEndsAt?: number;
   meetingPausedMs?: number;
 
   meeting?: {
     id: string;
     calledByName: string;
     startedAt: number;
+    voteStartsAt?: number;
+    eligibleIds?: string[];
+    settled?: boolean;
     endsAt: number;
     pausedRemainingMs: number;
   };
+
+  lastVoteResult?: {
+    meetingId: string;
+    outcome: "ELIMINATED" | "TIE" | "NO_VOTES";
+    playerId: string | null;
+    displayName: string | null;
+    tally: {
+      playerId: string;
+      displayName: string;
+      votes: number;
+    }[];
+  };
+
   challenge?: GeneratedChallenge["playerFacing"];
   results?: MatchResults;
 }

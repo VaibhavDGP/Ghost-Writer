@@ -661,7 +661,12 @@ export default function GameWorkspace({
           />
 
           <aside className="gw-challenge-sidebar">
-                        <MatchClock roomCode={roomCode} />
+                        <MatchClock
+  roomCode={roomCode}
+  onLeave={onLeave}
+  leaving={leaving}
+  roomError={roomError}
+/>
                         <MatchActions
               key={loaded.challenge.matchId}
               roomCode={roomCode}

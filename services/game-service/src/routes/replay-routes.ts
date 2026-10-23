@@ -60,10 +60,12 @@ const REPLAY_SCRIPT = `
     room.codingStartsAt = nil
     room.matchEndsAt = nil
   room.meeting = nil
-  room.meetingPausedMs = nil
+    room.meetingPausedMs = nil
+  room.lastVoteResult = nil
 
-  for _, player in ipairs(room.players) do
+    for _, player in ipairs(room.players) do
     player.isReady = false
+    player.eliminated = nil
   end
 
   -- Keep the room code, roster, and authenticated player sessions.

@@ -1,5 +1,5 @@
 import { redis } from "../config/redis.js";
-
+import { ACTIVE_PLAYER_LUA } from "./voting-lua.js";
 export interface SaveRepairRequest {
   code: string;
   tokenHash: string;
@@ -31,7 +31,7 @@ export type SaveRepairResult =
         | "INVALID_OBJECTIVE";
     };
 
-const SAVE_REPAIR_SCRIPT = `
+const SAVE_REPAIR_SCRIPT = ACTIVE_PLAYER_LUA + `
   local data = redis.call("GET", KEYS[1])
   if not data then
     return cjson.encode({ outcome = "NOT_FOUND" })

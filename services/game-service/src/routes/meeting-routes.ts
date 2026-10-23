@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import {
   meetingStore,
   type MeetingInput,
+  type MeetingMode,
 } from "../stores/meeting-store.js";
 import {
   hashSessionToken,
@@ -55,7 +56,6 @@ function failure(res: Response, outcome: string) {
   });
 }
 
-// This router must be registered before the coding-action routers.
 meetingRouter.post(
   ["/:code/run", "/:code/submit", "/:code/sabotage"],
   async (req, res, next) => {
@@ -75,6 +75,13 @@ meetingRouter.post(
         auth.hash,
         "READ",
       );
+
+      if (result.outcome === "OK" && result.snapshot?.isSpectator) {
+        res.status(403).json({
+          error: "You are a spectator for this match.",
+        });
+        return;
+      }
 
       if (result.outcome === "OK" && result.snapshot?.meeting) {
         res.status(409).json({
@@ -116,7 +123,7 @@ meetingRouter.all("/:code/meeting", async (req, res) => {
 
   if (!auth) return;
 
-  let mode: "READ" | "CALL" | "CHAT" = "READ";
+  let mode: MeetingMode = "READ";
   let input: MeetingInput = {};
 
   if (req.method === "POST") {
@@ -126,7 +133,11 @@ meetingRouter.all("/:code/meeting", async (req, res) => {
       !body ||
       typeof body !== "object" ||
       Array.isArray(body) ||
-      (body.action !== "CALL" && body.action !== "CHAT") ||
+      (
+        body.action !== "CALL" &&
+        body.action !== "CHAT" &&
+        body.action !== "VOTE"
+      ) ||
       typeof body.matchId !== "string" ||
       !uuid.test(body.matchId) ||
       typeof body.requestId !== "string" ||
@@ -144,6 +155,23 @@ meetingRouter.all("/:code/meeting", async (req, res) => {
       matchId: body.matchId,
       requestId: body.requestId,
     };
+
+    if (mode === "VOTE") {
+      if (
+        typeof body.meetingId !== "string" ||
+        body.meetingId.length > 80 ||
+        typeof body.targetId !== "string" ||
+        (body.targetId !== "" && !uuid.test(body.targetId))
+      ) {
+        res.status(400).json({
+          error: "Choose a player or Skip.",
+        });
+        return;
+      }
+
+      input.meetingId = body.meetingId;
+      input.targetId = body.targetId;
+    }
 
     if (mode === "CHAT") {
       if (

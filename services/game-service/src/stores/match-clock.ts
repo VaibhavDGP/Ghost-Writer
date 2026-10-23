@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { redis } from "../config/redis.js";
 import type { Room } from "../types/room.js";
+import { SETTLE_VOTE_LUA } from "./voting-lua.js";
 
 const challengeConfig = JSON.parse(
   await readFile(
@@ -35,7 +36,7 @@ interface ClockSnapshot {
   serverNowMs: number;
 }
 
-const READ_TIMED_ROOM_SCRIPT = `
+const READ_TIMED_ROOM_SCRIPT = SETTLE_VOTE_LUA + `
   local clock = redis.call("TIME")
   local nowMs = tonumber(clock[1]) * 1000 +
     math.floor(tonumber(clock[2]) / 1000)

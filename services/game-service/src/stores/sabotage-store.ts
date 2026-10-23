@@ -1,7 +1,7 @@
 import { redis } from "../config/redis.js";
 import type { Room } from "../types/room.js";
 import type { GeneratedChallenge } from "../services/challenge-generator.js";
-
+import { ACTIVE_PLAYER_LUA } from "./voting-lua.js";
 export interface SabotageRequest {
   matchId: string;
   baseVersion: number;
@@ -38,7 +38,7 @@ export interface SabotageSnapshot {
   receipt?: SabotageReceipt;
 }
 
-const SCRIPT = `
+const SCRIPT = ACTIVE_PLAYER_LUA + `
   local raw = redis.call("GET", KEYS[1])
   if not raw then
     return cjson.encode({outcome="NOT_FOUND"})
@@ -224,11 +224,12 @@ export async function sabotageStore(
   const key = `ghost-writer:room:${code}`;
 
   const result = await redis.eval(SCRIPT, {
-    keys: [
+        keys: [
       key,
       `${key}:sessions`,
       `${key}:player-roles`,
       `${key}:server-challenge`,
+      `${key}:join-requests`,
     ],
     arguments: [
       tokenHash,
