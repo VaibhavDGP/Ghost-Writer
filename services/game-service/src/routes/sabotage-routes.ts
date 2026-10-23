@@ -110,9 +110,11 @@ sabotageRouter.get("/:code/sabotage", async (req, res) => {
       matchId: challenge.matchId,
       codeVersion: challenge.codeVersion,
       tokensRemaining: economy.tokens,
-      cooldownRemainingMs: Math.max(
+            cooldownRemainingMs: Math.max(
         0,
-        economy.nextAllowedAt - nowMs,
+        economy.nextAllowedAt -
+          nowMs -
+          Math.max(0, (room.meeting?.endsAt ?? 0) - nowMs),
       ),
       mutations: choices,
     });

@@ -108,7 +108,13 @@ const SCRIPT = `
     end
   end
 
-    local codingStartsAt = tonumber(room.codingStartsAt)
+      if mode ~= "READ" and
+     room.meeting and
+     nowMs < tonumber(room.meeting.endsAt) then
+    return cjson.encode({outcome="MEETING_ACTIVE"})
+  end
+
+  local codingStartsAt = tonumber(room.codingStartsAt)
   local matchEndsAt = tonumber(room.matchEndsAt)
 
   if room.phase ~= "IN_PROGRESS" or

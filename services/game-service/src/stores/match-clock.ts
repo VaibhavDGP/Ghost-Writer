@@ -86,9 +86,11 @@ const READ_TIMED_ROOM_SCRIPT = `
       reason = "TIME_EXPIRED",
       finishedAt = deadline,
       expiresAt = expiresAt,
-      durationMs = math.max(
+            durationMs = math.max(
         0,
-        deadline - tonumber(room.codingStartsAt or room.countdownEndsAt)
+        deadline -
+          tonumber(room.codingStartsAt or room.countdownEndsAt) -
+          (room.meetingPausedMs or 0)
       ),
       acceptedRepairs = tonumber(
         economy.acceptedRepairs or challenge.codeVersion or 0

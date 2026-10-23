@@ -37,7 +37,17 @@ export interface Room {
   createdAt: string;
   countdownEndsAt?: number;
   codingStartsAt?: number;
-  matchEndsAt?: number;
+    matchEndsAt?: number;
+
+  meetingPausedMs?: number;
+
+  meeting?: {
+    id: string;
+    calledByName: string;
+    startedAt: number;
+    endsAt: number;
+    pausedRemainingMs: number;
+  };
   challenge?: GeneratedChallenge["playerFacing"];
   results?: MatchResults;
 }

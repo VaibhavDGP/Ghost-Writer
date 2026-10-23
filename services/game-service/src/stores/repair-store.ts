@@ -78,6 +78,10 @@ const SAVE_REPAIR_SCRIPT = `
     return cjson.encode({ outcome = "COUNTDOWN_ACTIVE" })
   end
 
+    if room.meeting and nowMs < tonumber(room.meeting.endsAt) then
+    return cjson.encode({ outcome = "NOT_STARTED" })
+  end
+
   if nowMs >= matchEndsAt then
     return cjson.encode({ outcome = "MATCH_EXPIRED" })
   end
@@ -194,7 +198,10 @@ const SAVE_REPAIR_SCRIPT = `
       reason = "ALL_REPAIRED",
       finishedAt = nowMs,
       expiresAt = nowMs + 60000,
-      durationMs = math.max(0, nowMs - codingStartsAt),
+            durationMs = math.max(
+        0,
+        nowMs - codingStartsAt - (room.meetingPausedMs or 0)
+      ),
       acceptedRepairs = economy.acceptedRepairs,
       successfulSabotages = economy.sabotages,
       completedObjectives = #completed,

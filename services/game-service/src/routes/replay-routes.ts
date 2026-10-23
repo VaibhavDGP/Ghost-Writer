@@ -58,7 +58,9 @@ const REPLAY_SCRIPT = `
   room.results = nil
   room.countdownEndsAt = nil
     room.codingStartsAt = nil
-  room.matchEndsAt = nil
+    room.matchEndsAt = nil
+  room.meeting = nil
+  room.meetingPausedMs = nil
 
   for _, player in ipairs(room.players) do
     player.isReady = false

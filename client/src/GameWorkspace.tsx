@@ -4,7 +4,7 @@ import "./monaco-setup";
 import "./GameWorkspace.css";
 import SubmitRepairButton from "./SubmitRepairButton";
 import MatchActions from "./MatchActions";
-import MatchClock from "./MatchClock";
+import MatchClock from "./MeetingPanel";
 
 interface Objective {
   id: string;
