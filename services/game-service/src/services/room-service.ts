@@ -1,6 +1,4 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { generateChallenge } from "./challenge-generator.js";
+import { generateUniqueChallenge } from "./unique-challenge.js";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { GameRole, Player, Room } from "../types/room.js";
 import {
@@ -204,10 +202,6 @@ export async function startRoom(
   }
 
   const tokenHash = hashSessionToken(sessionToken);
-  const challengePackageDirectory = resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    "../../../../challenges/templates/numeric-001",
-  );
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const room = await findRoomByCode(code);
@@ -216,22 +210,24 @@ export async function startRoom(
       return { outcome: "NOT_FOUND" };
     }
 
-    // Reject unauthorized requests before reading/generating challenge files.
-    const session = await findPlayerSession(code, tokenHash);
+    const session = await findPlayerSession(
+      code,
+      tokenHash,
+    );
+
     if (session.outcome !== "AUTHENTICATED") {
       return { outcome: "UNAUTHORIZED" };
     }
+
     if (!session.isHost) {
       return { outcome: "FORBIDDEN" };
     }
 
     const challenge =
-      room.phase === "IN_PROGRESS" || room.players.length < 2
+      room.phase === "IN_PROGRESS" ||
+      room.players.length < 2
         ? null
-        : await generateChallenge(
-            challengePackageDirectory,
-            room.players.length,
-          );
+        : await generateUniqueChallenge(room.players.length);
 
     const hackerIndex = randomInt(room.players.length);
     const roleAssignments: Record<string, GameRole> = {};

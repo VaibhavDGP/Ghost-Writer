@@ -15,6 +15,7 @@ import {
   sabotageStore,
   type SabotageRequest,
 } from "../stores/sabotage-store.js";
+import { findServerChallenge } from "../stores/challenge-store.js";
 
 export const sabotageRouter = Router();
 
@@ -78,39 +79,39 @@ sabotageRouter.get("/:code/sabotage", async (req, res) => {
 
     const challenge = room.challenge;
 
-    const choices =
-      challenge.templateId === "numeric-001"
-        ? mutations
-            .filter((mutation) =>
-              challenge.objectives.some(
-                (item) => item.id === mutation.objectiveId,
-              ),
-            )
-            .map((mutation) => {
-              let available = false;
+    const catalog =
+      snapshot.privateChallenge?.approvedMutations ??
+      mutations;
 
-              try {
-                available =
-                  applyMutation(challenge.source, mutation) !== null;
-              } catch {
-                // Unsupported syntax makes the action unavailable.
-              }
+    const choices = catalog
+      .filter((mutation) =>
+        challenge.objectives.some(
+          (item) => item.id === mutation.objectiveId,
+        ),
+      )
+      .map((mutation) => {
+        let available = false;
 
-              return {
-                id: mutation.id,
-                label: mutation.label,
-                available,
-                cost: economy.verified[mutation.objectiveId] ? 2 : 1,
-              };
-            })
-        : [];
+        try {
+          available =
+            applyMutation(challenge.source, mutation) !== null;
+        } catch {
+          // Unsupported or ambiguous syntax is not mutated.
+        }
 
-    // Never return the private challenge, receipts, or session hashes.
+        return {
+          id: mutation.id,
+          label: mutation.label,
+          available,
+          cost: economy.verified[mutation.objectiveId] ? 2 : 1,
+        };
+      });
+
     res.json({
       matchId: challenge.matchId,
       codeVersion: challenge.codeVersion,
       tokensRemaining: economy.tokens,
-            cooldownRemainingMs: Math.max(
+      cooldownRemainingMs: Math.max(
         0,
         economy.nextAllowedAt -
           nowMs -
@@ -120,6 +121,7 @@ sabotageRouter.get("/:code/sabotage", async (req, res) => {
     });
   } catch (error) {
     console.error("Sabotage status failed:", error);
+
     res.status(503).json({
       error: "Could not load sabotage status.",
     });
@@ -129,51 +131,46 @@ sabotageRouter.get("/:code/sabotage", async (req, res) => {
 sabotageRouter.post("/:code/sabotage", async (req, res) => {
   const body: unknown = req.body;
 
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    res.status(400).json({ error: "Invalid sabotage request." });
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    res.status(400).json({
+      error: "Invalid sabotage request.",
+    });
     return;
   }
 
-  const p = body as Record<string, unknown>;
+  const payload = body as Record<string, unknown>;
+
   const uuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   if (
-    Object.keys(p).some(
+    Object.keys(payload).some(
       (key) =>
-        !["matchId", "baseVersion", "mutationId", "requestId"].includes(
-          key,
-        ),
+        ![
+          "matchId",
+          "baseVersion",
+          "mutationId",
+          "requestId",
+        ].includes(key),
     ) ||
-    typeof p.matchId !== "string" ||
-    !uuid.test(p.matchId) ||
-    typeof p.requestId !== "string" ||
-    !uuid.test(p.requestId) ||
-    typeof p.baseVersion !== "number" ||
-    !Number.isSafeInteger(p.baseVersion) ||
-    p.baseVersion < 0 ||
-    typeof p.mutationId !== "string"
+    typeof payload.matchId !== "string" ||
+    !uuid.test(payload.matchId) ||
+    typeof payload.requestId !== "string" ||
+    !uuid.test(payload.requestId) ||
+    typeof payload.baseVersion !== "number" ||
+    !Number.isSafeInteger(payload.baseVersion) ||
+    payload.baseVersion < 0 ||
+    typeof payload.mutationId !== "string"
   ) {
-    res.status(400).json({ error: "Invalid sabotage request." });
+    res.status(400).json({
+      error: "Invalid sabotage request.",
+    });
     return;
   }
-
-  const mutation = mutations.find(
-    (item) => item.id === p.mutationId,
-  );
-
-  if (!mutation) {
-    res.status(400).json({ error: "Unknown approved mutation." });
-    return;
-  }
-
-  const request: SabotageRequest = {
-    matchId: p.matchId,
-    baseVersion: p.baseVersion,
-    mutationId: p.mutationId,
-    requestId: p.requestId,
-    objectiveId: mutation.objectiveId,
-  };
 
   const code = req.params.code.toUpperCase();
   const tokenHash = res.locals.tokenHash as string;
@@ -187,6 +184,28 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
   }
 
   try {
+    const policy = await findServerChallenge(code);
+    const catalog = policy?.approvedMutations ?? mutations;
+
+    const mutation = catalog.find(
+      (item) => item.id === payload.mutationId,
+    );
+
+    if (!mutation) {
+      res.status(400).json({
+        error: "Unknown approved mutation.",
+      });
+      return;
+    }
+
+    const request: SabotageRequest = {
+      matchId: payload.matchId,
+      baseVersion: payload.baseVersion,
+      mutationId: payload.mutationId,
+      requestId: payload.requestId,
+      objectiveId: mutation.objectiveId,
+    };
+
     const snapshot = await sabotageStore(
       code,
       tokenHash,
@@ -211,19 +230,15 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
       return;
     }
 
-    if (challenge.templateId !== "numeric-001") {
-      res.status(409).json({
-        error: "This template has no approved sabotage policy.",
-      });
-      return;
-    }
-
     let candidate: string | null = null;
 
     try {
-      candidate = applyMutation(challenge.source, mutation);
+      candidate = applyMutation(
+        challenge.source,
+        mutation,
+      );
     } catch {
-      // Reject unsupported syntax rather than guessing at edit regions.
+      // Unsupported syntax is rejected.
     }
 
     if (candidate === null) {
@@ -244,7 +259,9 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
       new Set(cases.map((item) => item.id)).size !== cases.length ||
       challenge.objectives.some(
         (objective) =>
-          !cases.some((item) => item.objectives.includes(objective.id)),
+          !cases.some((item) =>
+            item.objectives.includes(objective.id),
+          ),
       )
     ) {
       res.status(503).json({
@@ -253,11 +270,13 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
       return;
     }
 
-    const tests = cases.map(({ id, input, expectedOutput }) => ({
-      id,
-      input,
-      expectedOutput,
-    }));
+    const tests = cases.map(
+      ({ id, input, expectedOutput }) => ({
+        id,
+        input,
+        expectedOutput,
+      }),
+    );
 
     const before = await judgePublicDraft({
       source: challenge.source,
@@ -296,14 +315,19 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
       )
       .map((objective) => objective.id);
 
-    const saved = await sabotageStore(code, tokenHash, "COMMIT", {
-      ...request,
-      source: candidate,
-      sourceHash: createHash("sha256")
-        .update(candidate)
-        .digest("hex"),
-      completedObjectiveIds,
-    });
+    const saved = await sabotageStore(
+      code,
+      tokenHash,
+      "COMMIT",
+      {
+        ...request,
+        source: candidate,
+        sourceHash: createHash("sha256")
+          .update(candidate)
+          .digest("hex"),
+        completedObjectiveIds,
+      },
+    );
 
     if (
       saved.outcome !== "SAVED" &&

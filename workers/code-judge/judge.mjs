@@ -7,7 +7,7 @@ import { join } from "node:path";
 const IMAGE = "ghost-writer-judge:local";
 
 const MAX_SOURCE_BYTES = 64 * 1024;
-const MAX_TESTS = 5;
+const MAX_TESTS = 10;
 const MAX_TEST_BYTES = 8 * 1024;
 const MAX_OUTPUT_BYTES = 64 * 1024;
 

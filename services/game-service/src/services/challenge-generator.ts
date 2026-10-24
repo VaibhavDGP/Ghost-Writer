@@ -309,6 +309,15 @@ export async function generateChallenge(
   };
 }
 
-export type GeneratedChallenge = Awaited<
+type BaseChallenge = Awaited<
   ReturnType<typeof generateChallenge>
 >;
+
+export type GeneratedChallenge =
+  Omit<BaseChallenge, "serverOnly"> & {
+    serverOnly: BaseChallenge["serverOnly"] & {
+      specificationHash?: string;
+      approvedMutations?:
+        import("./sabotage-policy.js").Mutation[];
+    };
+  };
