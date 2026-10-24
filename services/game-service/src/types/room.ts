@@ -13,10 +13,11 @@ export interface Player {
 export interface MatchResults {
   matchId: string;
   winner: "CODERS" | "HACKER";
-  reason:
+    reason:
     | "ALL_REPAIRED"
     | "TIME_EXPIRED"
-    | "HACKER_ELIMINATED";
+    | "HACKER_ELIMINATED"
+    | "HACKER_LEFT";
   finishedAt: number;
   expiresAt: number;
   durationMs: number;

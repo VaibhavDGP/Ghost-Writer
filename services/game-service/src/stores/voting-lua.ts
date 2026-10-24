@@ -1,6 +1,9 @@
-// Shared by the clock and code-commit transactions.
+import { PRESENCE_FUNCTIONS_LUA } from "./presence-lua.js";
+
 // KEYS: room, sessions, roles, private challenge, join requests.
-export const SETTLE_VOTE_LUA = `
+export const SETTLE_VOTE_LUA = PRESENCE_FUNCTIONS_LUA + `
+gwPresence(nil, true)
+
 do
   local raw = redis.call("GET", KEYS[1])
 
@@ -35,8 +38,9 @@ do
       local counts = {}
 
       for voter, ballot in pairs(state.votes or {}) do
+        -- Only remaining eligible players can contribute votes.
         -- Skip is an empty string and never receives a tally.
-        if eligible[voter] and candidates[ballot.targetId] then
+        if candidates[voter] and candidates[ballot.targetId] then
           counts[ballot.targetId] =
             (counts[ballot.targetId] or 0) + 1
         end
@@ -133,6 +137,8 @@ do
     end
   end
 end
+
+gwPresence(nil, false)
 `;
 
 export const ACTIVE_PLAYER_LUA = SETTLE_VOTE_LUA + `
@@ -143,10 +149,21 @@ do
     local room = cjson.decode(raw)
     local id = redis.call("HGET", KEYS[2], ARGV[1])
 
+    if not id then
+      return cjson.encode({outcome="UNAUTHORIZED"})
+    end
+
+    local member = nil
+
     for _, player in ipairs(room.players) do
-      if player.id == id and player.eliminated then
-        return cjson.encode({outcome="UNAUTHORIZED"})
+      if player.id == id then
+        member = player
+        break
       end
+    end
+
+    if not member or member.eliminated then
+      return cjson.encode({outcome="UNAUTHORIZED"})
     end
   end
 end

@@ -6,13 +6,14 @@ import {
   saveNewRoom,
   addPlayerToRoom,
   startRoomInStore,
-  leaveRoomInStore,
   setPlayerReadyInRoom,
   saveNewRoomWithSession,
   findPlayerSession,
    findPlayerRole,
   addPlayerToRoomWithSession,
 } from "../stores/room-store.js";
+
+import { leaveRoomWithPresence } from "../stores/presence-store.js";
 
 import type {
   JoinRoomResult,
@@ -261,7 +262,7 @@ export async function leaveRoom(
     return { outcome: "UNAUTHORIZED" };
   }
 
-  return leaveRoomInStore(
+  return leaveRoomWithPresence(
     code,
     hashSessionToken(sessionToken),
   );

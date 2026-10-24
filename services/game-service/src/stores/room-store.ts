@@ -566,6 +566,23 @@ const START_ROOM_SCRIPT = `
   local nowMs = tonumber(redisTime[1]) * 1000 +
     math.floor(tonumber(redisTime[2]) / 1000)
 
+      -- Do not start with a player whose heartbeat has gone stale.
+  for _, player in ipairs(room.players) do
+    local lastSeen = tonumber(player.lastSeenAt)
+
+    if lastSeen and nowMs - lastSeen >= 15000 then
+      return cjson.encode({
+        outcome = "PLAYERS_NOT_READY"
+      })
+    end
+
+    if not lastSeen then
+      player.lastSeenAt = nowMs
+    end
+
+    player.connected = true
+  end
+
     room.phase = "IN_PROGRESS"
   room.countdownEndsAt = nowMs + 10000
   room.codingStartsAt = room.countdownEndsAt + 5000

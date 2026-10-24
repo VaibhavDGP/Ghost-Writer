@@ -97,65 +97,143 @@ function App() {
     window.localStorage.setItem("ghostWriterTheme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (!roomCode || !playerId) return;
+    useEffect(() => {
+    if (!roomCode) return;
 
-    let ignoreResults = false;
-    let requestInProgress = false;
+    const token = window.sessionStorage.getItem(
+      "ghostWriterSessionToken",
+    );
+
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) {
+      clearLocalRoom();
+      setNotice({
+        kind: "error",
+        text: "Your saved player session is missing. Please join again.",
+      });
+      return;
+    }
+
+    let stopped = false;
+    let inFlight = false;
+    let controller: AbortController | null = null;
 
     async function refreshRoom() {
-      if (requestInProgress) return;
-      requestInProgress = true;
+      if (stopped || inFlight) return;
+      inFlight = true;
+
+      const requestController = new AbortController();
+      controller = requestController;
+
+      const timeout = window.setTimeout(() => {
+        requestController.abort();
+      }, 8000);
 
       try {
-        const response = await fetch(`/rooms/${roomCode}`, {
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/rooms/${encodeURIComponent(roomCode!)}/presence`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: "no-store",
+            signal: requestController.signal,
+          },
+        );
+
         const result = (await response.json()) as RoomApiResponse;
 
-        if (roomResponseAction(response.status) === "closed") {
-          if (!ignoreResults) {
-            clearLocalRoom();
-            setNotice({ kind: "error", text: "This room has closed or expired." });
-          }
+        if (stopped) return;
+
+        if (
+          response.status === 401 ||
+          roomResponseAction(response.status) === "closed"
+        ) {
+          stopped = true;
+          clearLocalRoom();
+
+          setNotice({
+            kind: "error",
+            text:
+              result.error ??
+              "Your room session ended. Please join again.",
+          });
           return;
         }
 
         if (!response.ok) {
-          throw new Error(result.error ?? "Could not load this room.");
+          throw new Error(
+            result.error ?? "Could not reconnect to the room.",
+          );
         }
 
-        if (!result.room) {
-          throw new Error("The server returned incomplete room details.");
+        if (!result.room || !result.playerId) {
+          throw new Error(
+            "The server returned incomplete room details.",
+          );
         }
 
-        if (!ignoreResults) {
-          setRoom(result.room);
-          setLobbyError(null);
-        }
+        // The server restores the authenticated identity.
+        // A refresh never creates a replacement player.
+        window.sessionStorage.setItem(
+          "ghostWriterPlayerId",
+          result.playerId,
+        );
+
+        setPlayerId(result.playerId);
+        setRoom(result.room);
+        setLobbyError(null);
       } catch (error) {
-        if (!ignoreResults) {
+        if (!stopped) {
+          const message =
+            error instanceof Error &&
+            error.name !== "AbortError"
+              ? error.message
+              : "Could not reach the game server.";
+
           setLobbyError(
-            error instanceof Error
-              ? `${error.message} Reconnecting…`
-              : "Could not reach the game server. Reconnecting…",
+            `${message} Reconnecting… Your slot is held for 60 seconds after the last successful connection.`,
           );
         }
       } finally {
-        requestInProgress = false;
+        window.clearTimeout(timeout);
+        inFlight = false;
+
+        if (controller === requestController) {
+          controller = null;
+        }
+      }
+    }
+
+    function reconnect() {
+      if (document.visibilityState === "visible") {
+        void refreshRoom();
       }
     }
 
     void refreshRoom();
-    const intervalId = window.setInterval(() => {
+
+    const interval = window.setInterval(() => {
       void refreshRoom();
     }, 2000);
 
+    window.addEventListener("online", reconnect);
+    window.addEventListener("focus", reconnect);
+    document.addEventListener("visibilitychange", reconnect);
+
     return () => {
-      ignoreResults = true;
-      window.clearInterval(intervalId);
+      stopped = true;
+      window.clearInterval(interval);
+      controller?.abort();
+
+      window.removeEventListener("online", reconnect);
+      window.removeEventListener("focus", reconnect);
+      document.removeEventListener(
+        "visibilitychange",
+        reconnect,
+      );
     };
-  }, [roomCode, playerId]);
+  }, [roomCode]);
 
   async function submitRoom(
     event: FormEvent<HTMLFormElement>,

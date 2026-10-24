@@ -3,16 +3,17 @@ import "./MatchResults.css";
 
 export interface MatchSummary {
   matchId: string;
-    winner: "CODERS" | "HACKER";
-    reason:
+  winner: "CODERS" | "HACKER";
+  reason:
     | "ALL_REPAIRED"
     | "TIME_EXPIRED"
-    | "HACKER_ELIMINATED";
+    | "HACKER_ELIMINATED"
+    | "HACKER_LEFT";
   finishedAt: number;
   expiresAt: number;
   durationMs: number;
   acceptedRepairs: number;
-    successfulSabotages: number;
+  successfulSabotages: number;
   completedObjectives: number;
   totalObjectives: number;
   players: {
@@ -32,9 +33,30 @@ interface Props {
 }
 
 function formatDuration(milliseconds: number): string {
-  const seconds = Math.floor(Math.max(0, milliseconds) / 1000);
+  const seconds = Math.floor(
+    Math.max(0, milliseconds) / 1000,
+  );
   const minutes = Math.floor(seconds / 60);
+
   return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
+function resultExplanation(
+  reason: MatchSummary["reason"],
+): string {
+  switch (reason) {
+    case "HACKER_LEFT":
+      return "The hacker left the match or did not reconnect within 60 seconds.";
+
+    case "HACKER_ELIMINATED":
+      return "The hacker was eliminated by the vote.";
+
+    case "TIME_EXPIRED":
+      return "Time ran out before every required repair was completed.";
+
+    case "ALL_REPAIRED":
+      return "Every required repair objective was completed before the deadline.";
+  }
 }
 
 export default function MatchResults({
@@ -51,7 +73,10 @@ export default function MatchResults({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 250);
+
     return () => window.clearInterval(timer);
   }, []);
 
@@ -61,7 +86,9 @@ export default function MatchResults({
   );
 
   async function playAgain() {
-    const token = window.sessionStorage.getItem("ghostWriterSessionToken");
+    const token = window.sessionStorage.getItem(
+      "ghostWriterSessionToken",
+    );
 
     if (!token) {
       setError("Your player session is missing.");
@@ -80,17 +107,22 @@ export default function MatchResults({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ matchId: summary.matchId }),
+          body: JSON.stringify({
+            matchId: summary.matchId,
+          }),
         },
       );
 
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as {
+        error?: string;
+      };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Could not prepare another match.");
+        throw new Error(
+          result.error ?? "Could not prepare another match.",
+        );
       }
 
-      // App's existing room polling switches everyone back to the lobby.
       setReturning(true);
     } catch (cause) {
       setError(
@@ -105,42 +137,49 @@ export default function MatchResults({
 
   return (
     <main className="page-shell">
-      <section className="gw-results" aria-labelledby="results-title">
-        <p className="eyebrow">MATCH COMPLETE / ROOM {roomCode}</p>
+      <section
+        className="gw-results"
+        aria-labelledby="results-title"
+      >
+        <p className="eyebrow">
+          MATCH COMPLETE / ROOM {roomCode}
+        </p>
 
-                <h1 id="results-title">
-          {summary.winner === "HACKER" ? "Hacker wins." : "Coders win."}
+        <h1 id="results-title">
+          {summary.winner === "HACKER"
+            ? "Hacker wins."
+            : "Coders win."}
         </h1>
 
-                <p>
-          {summary.reason === "HACKER_ELIMINATED"
-            ? "The hacker was eliminated by the vote."
-            : summary.reason === "TIME_EXPIRED"
-              ? "Time ran out before every required repair was completed."
-              : "Every required repair objective was completed before the deadline."}
-        </p>
+        <p>{resultExplanation(summary.reason)}</p>
+
         <dl className="gw-results-stats">
           <div>
-                <dt>Match duration</dt>
+            <dt>Match duration</dt>
             <dd>{formatDuration(summary.durationMs)}</dd>
           </div>
+
           <div>
             <dt>Accepted repairs</dt>
             <dd>{summary.acceptedRepairs}</dd>
           </div>
-                    <div>
+
+          <div>
             <dt>Successful sabotages</dt>
             <dd>{summary.successfulSabotages ?? 0}</dd>
           </div>
+
           <div>
             <dt>Objectives completed</dt>
             <dd>
-              {summary.completedObjectives} / {summary.totalObjectives}
+              {summary.completedObjectives} /{" "}
+              {summary.totalObjectives}
             </dd>
           </div>
         </dl>
 
         <h2>Your crew</h2>
+
         <ul className="gw-results-players">
           {summary.players.map((player) => (
             <li key={player.id}>
@@ -160,13 +199,14 @@ export default function MatchResults({
 
         {isHost ? (
           <p>
-            Play Again keeps this room and its players. Everyone must ready up
-            before you start the next match.
+            Play Again keeps this room and its remaining
+            players. Everyone must ready up before the next
+            match.
           </p>
         ) : (
           <p>
-            Waiting for the host to choose Play Again. You can leave now if
-            you’re finished.
+            Waiting for the host to choose Play Again.
+            You can leave now if you’re finished.
           </p>
         )}
 
@@ -177,10 +217,15 @@ export default function MatchResults({
               type="button"
               onClick={() => void playAgain()}
               disabled={
-                busy || leaving || returning || secondsRemaining === 0
+                busy ||
+                leaving ||
+                returning ||
+                secondsRemaining === 0
               }
             >
-              {busy || returning ? "PREPARING LOBBY…" : "PLAY AGAIN"}
+              {busy || returning
+                ? "PREPARING LOBBY…"
+                : "PLAY AGAIN"}
             </button>
           )}
 
