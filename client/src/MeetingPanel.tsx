@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-
+import { FullscreenButton } from "./FullscreenControls";
 interface Snapshot {
   matchId: string;
   serverNowMs: number;
@@ -426,6 +426,8 @@ export default function MeetingPanel({
               ? "Vote"
               : "Emergency meeting"}
         </h2>
+
+                <FullscreenButton />
 
         {spectator && (
           <p>

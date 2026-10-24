@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
 import GameStartSequence from "./GameStartSequence";
 import MatchResults, { type MatchSummary } from "./MatchResults";
+import { FullscreenSetup } from "./FullscreenControls";
 import {
   clearPendingJoin,
   clearStoredRoom,
@@ -501,9 +502,10 @@ function App() {
   );
 }
 
-  if (roomCode && playerId) {
+    if (roomCode && playerId) {
     return (
       <main className="page-shell">
+        <FullscreenSetup key={roomCode} roomCode={roomCode} />
         <header className="topbar">
           <a className="brand" href="/" aria-label="Ghost Writer home">
             <span className="brand-mark" aria-hidden="true">GW</span>

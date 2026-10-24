@@ -5,7 +5,7 @@ import "./GameWorkspace.css";
 import SubmitRepairButton from "./SubmitRepairButton";
 import MatchActions from "./MatchActions";
 import MatchClock from "./MeetingPanel";
-
+import { FullscreenButton } from "./FullscreenControls";
 interface Objective {
   id: string;
   description: string;
@@ -593,8 +593,10 @@ export default function GameWorkspace({
           <span>GHOST WRITER</span>
         </div>
 
-        <div className="gw-header-actions">
+                <div className="gw-header-actions">
           <span className="gw-room-label">ROOM {roomCode}</span>
+
+          <FullscreenButton />
 
           <button
             className="theme-toggle"
