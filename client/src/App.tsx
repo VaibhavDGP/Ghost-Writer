@@ -457,6 +457,31 @@ function App() {
       room.phase === "LOBBY",
   );
 
+    // Do not display the lobby while restoring an existing session.
+  if (roomCode && (!room || !playerId)) {
+    return (
+      <main
+        className="page-shell"
+        aria-label="Restoring your session"
+        aria-busy="true"
+      >
+        {lobbyError && (
+          <>
+            <p role="alert">{lobbyError}</p>
+
+            <button
+              className="copy-button"
+              type="button"
+              onClick={returnToEntry}
+            >
+              RETURN TO HOME
+            </button>
+          </>
+        )}
+      </main>
+    );
+  }
+
     if (roomCode && playerId && room?.phase === "RESULTS") {
     if (!room.results) {
       return (
@@ -505,7 +530,9 @@ function App() {
     if (roomCode && playerId) {
     return (
       <main className="page-shell">
-        <FullscreenSetup key={roomCode} roomCode={roomCode} />
+       {room?.phase === "LOBBY" && (
+  <FullscreenSetup key={roomCode} roomCode={roomCode} />
+)}
         <header className="topbar">
           <a className="brand" href="/" aria-label="Ghost Writer home">
             <span className="brand-mark" aria-hidden="true">GW</span>

@@ -314,6 +314,21 @@ export default function GameStartSequence({
     </div>
   );
 
+    // Wait for the server before choosing a screen.
+  // If coding already started, also wait for the private role
+  // instead of briefly displaying the role-reveal animation.
+  if (!clock || (codingStarted && !role)) {
+    return (
+      <main
+        className="page-shell"
+        aria-label="Restoring your match"
+        aria-busy="true"
+      >
+        {(error || roomError) && roomActions}
+      </main>
+    );
+  }
+
   // Enter automatically when the original reveal period ends.
   // Reconnecting to an ongoing match also enters automatically.
   if (role && codingStarted) {
