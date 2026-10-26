@@ -1,11 +1,9 @@
-// Every script using this module must supply keys in this order:
+// KEYS:
 // 1. room
 // 2. sessions
 // 3. player roles
 // 4. private challenge
 // 5. join requests
-//
-// This defines a Lua function. It does not execute it automatically.
 
 export const PRESENCE_FUNCTIONS_LUA = `
 local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
@@ -20,8 +18,6 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
   local cutoff = now
   local meeting = room.meeting
 
-  -- Resolve departures that happened before a vote before counting it.
-  -- Later departures are handled after the vote has been settled.
   if stopAtMeetingEnd and
      room.phase == "IN_PROGRESS" and
      meeting and
@@ -45,6 +41,7 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
       for _, player in ipairs(list) do
         if not seen[player.id] then
           seen[player.id] = true
+
           table.insert(players, {
             id=player.id,
             displayName=player.displayName,
@@ -57,21 +54,29 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     return players
   end
 
-  local function finishForHackerDeparture(at)
+  local function finishForHackerDeparture(at, departingId)
     if room.phase ~= "IN_PROGRESS" or not room.challenge then
       return
     end
 
-    -- If the match deadline came first, the clock decides the result.
     if room.matchEndsAt and at >= room.matchEndsAt then
       return
+    end
+
+    -- A remaining, non-eliminated hacker keeps the match alive.
+    -- Disconnected players retain their place during the grace period.
+    for _, player in ipairs(room.players) do
+      if player.id ~= departingId and
+         not player.eliminated and
+         redis.call("HGET", KEYS[3], player.id) == "HACKER" then
+        return
+      end
     end
 
     local challenge = room.challenge
     local economy = private.sabotage or {}
     local paused = room.meetingPausedMs or 0
 
-    -- Only subtract meeting time that actually elapsed.
     if room.meeting and at < room.meeting.endsAt then
       paused = math.max(
         0,
@@ -104,7 +109,6 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
   local departures = {}
 
   for _, player in ipairs(room.players) do
-    -- Existing rooms get a grace period when this feature is installed.
     if not tonumber(player.lastSeenAt) then
       player.lastSeenAt = now
       changed = true
@@ -129,7 +133,6 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     local forced = player.id == forcedPlayerId
     local expired = expiresAt <= cutoff
 
-    -- Preserve chronological ordering with the match deadline.
     if room.phase == "IN_PROGRESS" and
        room.matchEndsAt and
        expiresAt >= room.matchEndsAt then
@@ -163,8 +166,9 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
 
     if member then
       if room.phase == "IN_PROGRESS" then
-        if redis.call("HGET", KEYS[3], member.id) == "HACKER" then
-          finishForHackerDeparture(departure.at)
+        if not member.eliminated and
+           redis.call("HGET", KEYS[3], member.id) == "HACKER" then
+          finishForHackerDeparture(departure.at, member.id)
         end
 
         table.insert(room.departedPlayers, {
@@ -175,7 +179,6 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
 
       table.remove(room.players, index)
 
-      -- Revoke every session belonging to this player.
       local sessions = redis.call("HGETALL", KEYS[2])
       for i=1,#sessions,2 do
         if sessions[i + 1] == member.id then
@@ -183,19 +186,17 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
         end
       end
 
-      -- Remove old join receipts for this player.
       local joins = redis.call("HGETALL", KEYS[5])
       for i=1,#joins,2 do
         local ok, receipt = pcall(cjson.decode, joins[i + 1])
+
         if ok and type(receipt) == "table" and
            receipt.playerId == member.id then
           redis.call("HDEL", KEYS[5], joins[i])
         end
       end
 
-      -- Keep their private role until replay/expiry so results can
-      -- still include everyone who participated in the match.
-
+      -- Preserve private role records for the final results.
       if room.meeting and not room.meeting.settled then
         local eligible = {}
 
@@ -234,6 +235,20 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     return
   end
 
+  -- Only lobby population changes affect the configured count.
+  -- An active two-hacker match keeps its original setting.
+  if room.phase == "LOBBY" and
+     #room.players <= 5 and
+     room.hackerCount ~= 1 then
+    room.hackerCount = 1
+
+    for _, player in ipairs(room.players) do
+      player.isReady = false
+    end
+
+    changed = true
+  end
+
   local hostExists = false
   for _, player in ipairs(room.players) do
     if player.id == room.hostPlayerId then
@@ -263,8 +278,6 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     changed = true
   end
 
-  -- Other result-producing scripts use the current roster.
-  -- Add departed participants back to the results summary.
   if room.phase == "RESULTS" and room.results then
     local known = {}
     local players = room.results.players or {}
@@ -280,6 +293,7 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
           displayName=player.displayName,
           role=redis.call("HGET", KEYS[3], player.id) or "UNKNOWN"
         })
+
         known[player.id] = true
         changed = true
       end
@@ -289,15 +303,11 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
   end
 
   if changedPrivate and privateRaw then
-    redis.call(
-      "SET", KEYS[4], cjson.encode(private), "KEEPTTL"
-    )
+    redis.call("SET", KEYS[4], cjson.encode(private), "KEEPTTL")
   end
 
   if changed then
-    redis.call(
-      "SET", KEYS[1], cjson.encode(room), "KEEPTTL"
-    )
+    redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
   end
 
   if room.phase == "RESULTS" and room.results then

@@ -3,6 +3,7 @@ import "./App.css";
 import GameStartSequence from "./GameStartSequence";
 import MatchResults, { type MatchSummary } from "./MatchResults";
 import { FullscreenSetup } from "./FullscreenControls";
+import HackerSettings from "./HackerSettings";
 import {
   clearPendingJoin,
   clearStoredRoom,
@@ -654,6 +655,13 @@ function App() {
                 );
               })}
             </div>
+          )}
+
+                    {room?.phase === "LOBBY" && (
+            <HackerSettings
+              key={roomCode}
+              roomCode={roomCode}
+            />
           )}
 
           {room?.phase === "LOBBY" && (

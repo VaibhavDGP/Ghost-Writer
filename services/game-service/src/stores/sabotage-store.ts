@@ -95,7 +95,11 @@ const SCRIPT = ACTIVE_PLAYER_LUA + `
 
     local previous = economy.receipts[p.requestId]
 
-    if previous then
+        if previous then
+      if previous.playerId and previous.playerId ~= playerId then
+        return cjson.encode({outcome="REQUEST_CONFLICT"})
+      end
+
       if previous.baseVersion ~= p.baseVersion or
          previous.mutationId ~= p.mutationId then
         return cjson.encode({outcome="REQUEST_CONFLICT"})
@@ -184,7 +188,8 @@ const SCRIPT = ACTIVE_PLAYER_LUA + `
         nextAllowedAt=economy.nextAllowedAt
       }
 
-      economy.receipts[p.requestId] = {
+            economy.receipts[p.requestId] = {
+        playerId=playerId,
         baseVersion=p.baseVersion,
         mutationId=p.mutationId,
         receipt=receipt

@@ -551,9 +551,15 @@ const START_ROOM_SCRIPT = `
     end
   end
 
-  if assignmentCount ~= #room.players or hackerCount ~= 1 then
+    local expectedHackerCount =
+    (#room.players > 5 and room.hackerCount == 2) and 2 or 1
+
+  if assignmentCount ~= #room.players or
+     hackerCount ~= expectedHackerCount then
     return cjson.encode({ outcome = "ROSTER_CHANGED" })
   end
+
+  room.hackerCount = expectedHackerCount
 
   for _, player in ipairs(room.players) do
     if roles[player.id] == nil then
@@ -595,7 +601,18 @@ const START_ROOM_SCRIPT = `
   -- Starting clears the lobby expiry. Completion will set a post-game TTL.
   redis.call("SET", KEYS[1], cjson.encode(room))
 
-  if challenge then
+    if challenge then
+    -- One shared economy for the entire hacker team.
+    challenge.serverOnly.sabotage = {
+      tokens=expectedHackerCount == 2 and 5 or 3,
+      nextAllowedAt=0,
+      verified={},
+      receipts={},
+      acceptedRepairs=0,
+      sabotages=0,
+      attemptAfter=0
+    }
+
     redis.call("SET", KEYS[3], cjson.encode(challenge.serverOnly))
 
     local ttl = redis.call("PTTL", KEYS[1])

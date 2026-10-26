@@ -36,6 +36,7 @@ export interface Room {
   id: string;
   code: string;
   hostPlayerId: string;
+  hackerCount?: 1 | 2;
   phase: "LOBBY" | "IN_PROGRESS" | "RESULTS";
   players: Player[];
   maxPlayers: number;

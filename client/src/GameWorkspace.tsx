@@ -6,6 +6,7 @@ import SubmitRepairButton from "./SubmitRepairButton";
 import MatchActions from "./MatchActions";
 import MatchClock from "./MeetingPanel";
 import { FullscreenButton } from "./FullscreenControls";
+import HackerChat from "./HackerChat";
 interface Objective {
   id: string;
   description: string;
@@ -676,6 +677,13 @@ export default function GameWorkspace({
               codeVersion={loaded.challenge.codeVersion}
               role={role}
             />
+                        {role === "HACKER" && (
+              <HackerChat
+                key={loaded.challenge.matchId}
+                roomCode={roomCode}
+                matchId={loaded.challenge.matchId}
+              />
+            )}
             <section className="gw-info-panel">
               <h2>Repair objectives</h2>
               <p className="gw-muted">

@@ -207,14 +207,11 @@ export async function startRoom(
   for (let attempt = 0; attempt < 3; attempt++) {
     const room = await findRoomByCode(code);
 
-    if (room === null) {
+    if (!room) {
       return { outcome: "NOT_FOUND" };
     }
 
-    const session = await findPlayerSession(
-      code,
-      tokenHash,
-    );
+    const session = await findPlayerSession(code, tokenHash);
 
     if (session.outcome !== "AUTHENTICATED") {
       return { outcome: "UNAUTHORIZED" };
@@ -224,19 +221,59 @@ export async function startRoom(
       return { outcome: "FORBIDDEN" };
     }
 
-    const challenge =
-      room.phase === "IN_PROGRESS" ||
-      room.players.length < 2
-        ? null
-        : await generateUniqueChallenge(room.players.length);
+    if (room.phase === "IN_PROGRESS") {
+      return { outcome: "STARTED", room };
+    }
 
-    const hackerIndex = randomInt(room.players.length);
+    if (room.phase !== "LOBBY") {
+      return { outcome: "NOT_IN_LOBBY" };
+    }
+
+    if (room.players.length < 2) {
+      return { outcome: "NOT_ENOUGH_PLAYERS" };
+    }
+
+    if (
+      room.players.some(
+        (player) =>
+          player.id !== room.hostPlayerId &&
+          player.isReady !== true,
+      )
+    ) {
+      return { outcome: "PLAYERS_NOT_READY" };
+    }
+
+    const hackerCount =
+      room.players.length > 5 && room.hackerCount === 2
+        ? 2
+        : 1;
+
+    const challenge = await generateUniqueChallenge(
+      room.players.length,
+    );
+
+    const candidates = room.players.map((player) => player.id);
+    const hackers = new Set<string>();
+
+    // Sample without replacement: one player cannot fill both slots.
+    while (hackers.size < hackerCount) {
+      const index = randomInt(candidates.length);
+      const [selected] = candidates.splice(index, 1);
+
+      if (!selected) {
+        throw new Error("Could not assign hacker roles.");
+      }
+
+      hackers.add(selected);
+    }
+
     const roleAssignments: Record<string, GameRole> = {};
 
-    room.players.forEach((player, index) => {
-      roleAssignments[player.id] =
-        index === hackerIndex ? "HACKER" : "CODER";
-    });
+    for (const player of room.players) {
+      roleAssignments[player.id] = hackers.has(player.id)
+        ? "HACKER"
+        : "CODER";
+    }
 
     const result = await startRoomInStore(
       code,

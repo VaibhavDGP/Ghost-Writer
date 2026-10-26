@@ -90,8 +90,18 @@ do
         tally=tally
       }
 
+            local activeHackers = 0
+
+      for _, player in ipairs(room.players) do
+        if not player.eliminated and
+           redis.call("HGET", KEYS[3], player.id) == "HACKER" then
+          activeHackers = activeHackers + 1
+        end
+      end
+
       if winner and
-         redis.call("HGET", KEYS[3], winner.id) == "HACKER" then
+         redis.call("HGET", KEYS[3], winner.id) == "HACKER" and
+         activeHackers == 0 then
 
         local finishedAt = meeting.endsAt
         local economy = private.sabotage or {}

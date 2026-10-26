@@ -9,6 +9,7 @@ import { clockRouter } from "./routes/clock-routes.js";
 import { meetingRouter } from "./routes/meeting-routes.js";
 import { presenceRouter } from "./routes/presence-routes.js";
 import { startPresenceSweeper } from "./stores/presence-store.js";
+import { hackerRouter } from "./routes/hacker-routes.js";
 
 const app = express();
 const PORT = 3001;
@@ -25,6 +26,7 @@ app.get("/health", (_req, res) => {
 // Presence and meeting checks run before game actions.
 app.use("/rooms", presenceRouter);
 app.use("/rooms", meetingRouter);
+app.use("/rooms", hackerRouter);
 
 app.use("/rooms", roomRouter);
 app.use("/rooms", runRouter);

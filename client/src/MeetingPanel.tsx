@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { FullscreenButton } from "./FullscreenControls";
+import HackerChat from "./HackerChat";
 interface Snapshot {
   matchId: string;
   serverNowMs: number;
@@ -428,6 +429,14 @@ export default function MeetingPanel({
         </h2>
 
                 <FullscreenButton />
+
+                        {modal && !spectator && data && (
+          <HackerChat
+            key={data.matchId}
+            roomCode={roomCode}
+            matchId={data.matchId}
+          />
+        )}
 
         {spectator && (
           <p>

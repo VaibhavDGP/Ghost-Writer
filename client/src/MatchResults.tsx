@@ -46,10 +46,10 @@ function resultExplanation(
 ): string {
   switch (reason) {
     case "HACKER_LEFT":
-      return "The hacker left the match or did not reconnect within 60 seconds.";
+      return "The last active hacker left or did not reconnect within 60 seconds.";
 
     case "HACKER_ELIMINATED":
-      return "The hacker was eliminated by the vote.";
+      return "The last active hacker was eliminated by the vote.";
 
     case "TIME_EXPIRED":
       return "Time ran out before every required repair was completed.";
@@ -146,8 +146,12 @@ export default function MatchResults({
         </p>
 
         <h1 id="results-title">
-          {summary.winner === "HACKER"
-            ? "Hacker wins."
+                    {summary.winner === "HACKER"
+            ? summary.players.filter(
+                (player) => player.role === "HACKER",
+              ).length > 1
+              ? "Hackers win."
+              : "Hacker wins."
             : "Coders win."}
         </h1>
 
