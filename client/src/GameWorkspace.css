@@ -313,3 +313,97 @@
 .gw-run-results .gw-warning {
   margin: 12px 0;
 }
+
+/* Match the editor panel's height to the sidebar on desktop. */
+@media (min-width: 1001px) {
+  .gw-workspace-grid {
+    align-items: stretch;
+  }
+
+  .gw-editor-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .gw-editor-panel > * {
+    flex-shrink: 0;
+  }
+
+  .gw-editor-container {
+    position: relative;
+    flex: 1 0 360px;
+    height: auto;
+    min-height: 360px;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  /* Let Monaco fill the available space without its internal
+     dimensions forcing the grid to grow repeatedly. */
+  .gw-editor-container > :first-child {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .gw-challenge-sidebar {
+    align-content: start;
+  }
+}
+
+.gw-function-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gw-border);
+}
+
+.gw-function-controls p {
+  margin: 0;
+}
+
+.gw-function-controls select {
+  min-width: 180px;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid var(--gw-border);
+  border-radius: 6px;
+  color: inherit;
+  background: var(--gw-code-background);
+  font: inherit;
+}
+
+.gw-function-controls option {
+  color: #111;
+  background: #fff;
+}
+
+.gw-activity-scroll {
+  overflow-x: auto;
+}
+
+.gw-activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.gw-activity-table th,
+.gw-activity-table td {
+  padding: 10px 7px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--gw-border);
+  overflow-wrap: anywhere;
+}
+
+.gw-shared-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}

@@ -8,8 +8,10 @@ import { sabotageRouter } from "./routes/sabotage-routes.js";
 import { clockRouter } from "./routes/clock-routes.js";
 import { meetingRouter } from "./routes/meeting-routes.js";
 import { presenceRouter } from "./routes/presence-routes.js";
-import { startPresenceSweeper } from "./stores/presence-store.js";
 import { hackerRouter } from "./routes/hacker-routes.js";
+import { sharedDocumentRouter } from "./routes/shared-document-routes.js";
+import { startPresenceSweeper } from "./stores/presence-store.js";
+import { attachSharedRealtime } from "./real-time.js";
 
 const app = express();
 const PORT = 3001;
@@ -23,10 +25,12 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// Presence and meeting checks run before game actions.
 app.use("/rooms", presenceRouter);
 app.use("/rooms", meetingRouter);
 app.use("/rooms", hackerRouter);
+
+// Must run before submitRouter.
+app.use("/rooms", sharedDocumentRouter);
 
 app.use("/rooms", roomRouter);
 app.use("/rooms", runRouter);
@@ -40,10 +44,10 @@ async function startServer() {
   console.log("Connected to Redis");
 
   const server = app.listen(PORT, () => {
-    console.log(
-      `Game Service running at http://localhost:${PORT}`,
-    );
+    console.log(`Game Service running at http://localhost:${PORT}`);
   });
+
+  attachSharedRealtime(server);
 
   const stopPresenceSweeper = startPresenceSweeper();
   server.on("close", stopPresenceSweeper);

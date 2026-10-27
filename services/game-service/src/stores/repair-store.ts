@@ -137,7 +137,17 @@ const SAVE_REPAIR_SCRIPT = ACTIVE_PLAYER_LUA + `
     return cjson.encode({ outcome = "NOT_STARTED" })
   end
 
-  local private = cjson.decode(privateRaw)
+   local private = cjson.decode(privateRaw)
+
+  if not gwAcceptRepair(
+    private,
+    playerId,
+    ARGV[4],
+    currentVersion,
+    nowMs
+  ) then
+    return cjson.encode({ outcome = "STALE_VERSION" })
+  end
 
   local economy = private.sabotage or {
     tokens = 3,

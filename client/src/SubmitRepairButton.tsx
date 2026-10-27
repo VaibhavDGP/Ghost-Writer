@@ -90,11 +90,9 @@ export default function SubmitRepairButton({
         return;
       }
 
-      setMessage(
-        `Repair accepted as version ${data.codeVersion}. Reloading the workspace…`,
+            setMessage(
+        `Repair accepted as version ${data.codeVersion}. Your draft remains open. Use “Load Latest Official Code” when you’re ready to update the editor.`,
       );
-
-      window.setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
       setMessage(
         error instanceof Error

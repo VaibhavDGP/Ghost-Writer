@@ -278,8 +278,13 @@ const SCRIPT = SETTLE_VOTE_LUA + `
       hasVoted=active and myVote ~= nil,
       myVote=myVote and myVote.targetId or cjson.null,
       lastVoteResult=room.lastVoteResult or cjson.null,
-      officialSource=member.eliminated and room.challenge.source or cjson.null,
-      codeVersion=room.challenge.codeVersion,
+            officialSource=member.eliminated and (
+        private.collaboration and
+        gwRenderDocument(private.collaboration, "*", nil) or
+        room.challenge.source
+      ) or cjson.null,
+      codeVersion=private.collaboration and
+        private.collaboration.revision or room.challenge.codeVersion,
       canCall=not member.eliminated and not active and now >= startsAt and
         not state.called[playerId] and state.count < 3,
       meeting=active and room.meeting or cjson.null,

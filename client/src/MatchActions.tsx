@@ -214,20 +214,7 @@ export default function MatchActions({
         {view && ` Latest version: ${view.codeVersion}.`}
       </p>
 
-      {stale && (
-        <div className="gw-warning" role="status">
-          <p>The official code changed. Stale submissions will be rejected.</p>
-          <p>Copy any unfinished edits before loading the new version.</p>
-          <button
-            className="copy-button"
-            type="button"
-            onClick={() => window.location.reload()}
-            disabled={sending}
-          >
-            LOAD LATEST OFFICIAL CODE
-          </button>
-        </div>
-      )}
+      
 
       {role === "HACKER" && (
         <>
@@ -240,7 +227,8 @@ export default function MatchActions({
           </p>
 
           <p className="gw-muted">
-            These actions change the official program, not your private draft.
+                      These actions change the official and shared program.
+            The target function must be unclaimed with no unsubmitted edits.
             Previously repaired objectives cost two tokens.
           </p>
 

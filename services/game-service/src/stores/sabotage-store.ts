@@ -6,6 +6,8 @@ export interface SabotageRequest {
   matchId: string;
   baseVersion: number;
   mutationId: string;
+    functionName?: string;
+  functionBody?: string;
   requestId: string;
   objectiveId?: string;
   source?: string;
@@ -146,6 +148,22 @@ const SCRIPT = ACTIVE_PLAYER_LUA + `
       return cjson.encode({outcome="INVALID_MUTATION"})
     end
 
+      local doc = private.collaboration
+    local target = doc and p.functionName and
+      doc.functions[p.functionName] or nil
+
+    if not target then
+      return cjson.encode({outcome="START_A_FRESH_MATCH"})
+    end
+
+    if target.lock then
+      return cjson.encode({outcome="FUNCTION_BUSY"})
+    end
+
+    if target.body ~= target.official then
+      return cjson.encode({outcome="FUNCTION_HAS_UNSUBMITTED_EDITS"})
+    end
+
     local cost = economy.verified[p.objectiveId] and 2 or 1
 
     if economy.tokens < cost then
@@ -169,7 +187,21 @@ const SCRIPT = ACTIVE_PLAYER_LUA + `
         "SET", KEYS[4], cjson.encode(private), "KEEPTTL"
       )
 
-    elseif mode == "COMMIT" then
+        elseif mode == "COMMIT" then
+      if type(p.functionBody) ~= "string" then
+        return cjson.encode({outcome="INVALID_MUTATION"})
+      end
+
+      if gwRenderDocument(doc, p.functionName, p.functionBody) ~= p.source then
+        return cjson.encode({outcome="INVALID_MUTATION"})
+      end
+
+      target.body = p.functionBody
+      target.official = p.functionBody
+      target.accepted = false
+      target.revision = target.revision + 1
+      doc.revision = doc.revision + 1
+
       challenge.source = p.source
       challenge.sourceHash = p.sourceHash
       challenge.completedObjectiveIds = p.completedObjectiveIds

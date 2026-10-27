@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Router, type Response } from "express";
 import { judgePublicDraft } from "../../../../workers/code-judge/judge.mjs";
 import { acquireJudgeSlot } from "../services/judge-slot.js";
+import { splitFunctions } from "../services/function-document.js";
 import {
   hashSessionToken,
   readBearerToken,
@@ -204,6 +205,7 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
       mutationId: payload.mutationId,
       requestId: payload.requestId,
       objectiveId: mutation.objectiveId,
+            functionName: mutation.functionName,
     };
 
     const snapshot = await sabotageStore(
@@ -320,7 +322,8 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
       tokenHash,
       "COMMIT",
       {
-        ...request,
+                ...request,
+        functionBody: splitFunctions(candidate).bodies[mutation.functionName]!,
         source: candidate,
         sourceHash: createHash("sha256")
           .update(candidate)

@@ -46,7 +46,7 @@ function resultExplanation(
 ): string {
   switch (reason) {
     case "HACKER_LEFT":
-      return "The last active hacker left or did not reconnect within 60 seconds.";
+      return "The last active hacker left or did not reconnect within five minutes.";
 
     case "HACKER_ELIMINATED":
       return "The last active hacker was eliminated by the vote.";

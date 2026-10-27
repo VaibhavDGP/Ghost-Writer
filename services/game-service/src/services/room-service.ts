@@ -1,6 +1,7 @@
 import { generateUniqueChallenge } from "./unique-challenge.js";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { GameRole, Player, Room } from "../types/room.js";
+import { createSharedDocument } from "./function-document.js";
 import {
   findRoomByCode,
   saveNewRoom,
@@ -251,6 +252,13 @@ export async function startRoom(
     const challenge = await generateUniqueChallenge(
       room.players.length,
     );
+
+        Object.assign(challenge.serverOnly, {
+      collaboration: createSharedDocument(
+        challenge.playerFacing.matchId,
+        challenge.playerFacing.source,
+      ),
+    });
 
     const candidates = room.players.map((player) => player.id);
     const hackers = new Set<string>();

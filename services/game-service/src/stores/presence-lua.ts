@@ -5,7 +5,9 @@
 // 4. private challenge
 // 5. join requests
 
-export const PRESENCE_FUNCTIONS_LUA = `
+import { SHARED_DOCUMENT_LUA } from "./shared-document-lua.js";
+
+export const PRESENCE_FUNCTIONS_LUA = SHARED_DOCUMENT_LUA + `
 local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
   local raw = redis.call("GET", KEYS[1])
   if not raw then return end
@@ -115,7 +117,7 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     end
 
     local lastSeen = tonumber(player.lastSeenAt)
-    local connected = now - lastSeen < 15000
+        local connected = now - lastSeen < 90000
 
     if player.connected ~= connected then
       player.connected = connected
@@ -129,7 +131,7 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
       changed = true
     end
 
-    local expiresAt = lastSeen + 60000
+    local expiresAt = lastSeen + 300000
     local forced = player.id == forcedPlayerId
     local expired = expiresAt <= cutoff
 
@@ -300,6 +302,10 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     end
 
     room.results.players = players
+  end
+
+      if gwCleanDocument(room, private, now) then
+    changedPrivate = true
   end
 
   if changedPrivate and privateRaw then

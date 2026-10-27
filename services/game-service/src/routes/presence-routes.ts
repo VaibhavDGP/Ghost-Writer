@@ -43,7 +43,7 @@ presenceRouter.post("/:code/presence", async (req, res) => {
     if (result.outcome === "UNAUTHORIZED") {
       res.status(401).json({
         error:
-          "Your player session ended. You may have left the room or exceeded the 60-second reconnection period.",
+"Your player session ended. You may have left the room or exceeded the five-minute reconnection period.",
       });
       return;
     }

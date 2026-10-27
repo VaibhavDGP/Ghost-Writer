@@ -25,7 +25,7 @@ interface Token {
   end: number;
 }
 
-function tokenize(source: string): Token[] {
+export function tokenize(source: string): Token[] {
   // This deliberately supports the numeric template's ordinary C++ syntax.
   // Unsupported syntax makes sabotage unavailable; it is never guessed at.
   const text = source.replace(

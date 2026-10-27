@@ -194,7 +194,7 @@ function App() {
               : "Could not reach the game server.";
 
           setLobbyError(
-            `${message} Reconnecting… Your slot is held for 60 seconds after the last successful connection.`,
+            `${message} Reconnecting… Your slot is held for five minutes after the last successful connection.`,
           );
         }
       } finally {

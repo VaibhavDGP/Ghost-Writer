@@ -576,7 +576,7 @@ const START_ROOM_SCRIPT = `
   for _, player in ipairs(room.players) do
     local lastSeen = tonumber(player.lastSeenAt)
 
-    if lastSeen and nowMs - lastSeen >= 15000 then
+        if lastSeen and nowMs - lastSeen >= 90000 then
       return cjson.encode({
         outcome = "PLAYERS_NOT_READY"
       })

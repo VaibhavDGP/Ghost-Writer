@@ -624,7 +624,7 @@ export default function MeetingPanel({
               {time((data?.matchEndsAt ?? serverNow) - serverNow)}
             </p>
 
-            <h3>Official code — version {data?.codeVersion}</h3>
+                        <h3>Shared code — revision {data?.codeVersion}</h3>
 
             <pre
               style={{
