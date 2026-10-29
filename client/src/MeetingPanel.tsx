@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { FullscreenButton } from "./FullscreenControls";
 import HackerChat from "./HackerChat";
 import "./MeetingPanel.css";
-
+import SpectatorScreen from "./SpectatorScreen";
 interface Ballot {
   voterId: string;
   voterName: string;
@@ -751,16 +751,20 @@ export default function MeetingPanel({
               )}
             </aside>
           </div>
-        ) : spectator ? (
-          <div className="gm-spectator">
-            {result && <h3>{resultText(result)}</h3>}
-            <p role="timer">
-              Time remaining: {time((data?.matchEndsAt ?? serverNow) - serverNow)}
-            </p>
-            <h3>Shared code — revision {data?.codeVersion}</h3>
-            <pre>{data?.officialSource}</pre>
+                ) : spectator && data ? (
+          <SpectatorScreen
+            key={`${data.matchId}:${data.playerId}`}
+            roomCode={roomCode}
+            matchId={data.matchId}
+            playerId={data.playerId}
+            players={data.players}
+            source={data.officialSource ?? ""}
+            revision={data.codeVersion}
+            remainingMs={data.matchEndsAt - serverNow}
+            lastDecision={result ? resultText(result) : null}
+          >
             {feedback}
-          </div>
+          </SpectatorScreen>
         ) : null}
 
         <footer className="gm-footer">
