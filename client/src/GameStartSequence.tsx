@@ -385,84 +385,35 @@ export default function GameStartSequence({
     );
   }
 
-  // Original countdown screen: only the first ten seconds.
+  // Keep the existing countdown timing and automatic role reveal.
   return (
     <main className="page-shell start-sequence-shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            GW
-          </span>
+          <span className="brand-mark" aria-hidden="true">GW</span>
           <span>GHOST WRITER</span>
         </div>
 
-        <div className="topbar-right">
-          <span className="online-mark">
-            <span className="online-dot" />
-            GAME STARTING
-          </span>
-
-          <button
-            className="theme-toggle"
-            type="button"
-            onClick={onToggleTheme}
-            aria-label={`Switch to ${
-              theme === "light" ? "dark" : "light"
-            } mode`}
-          >
-            {theme === "light" ? "◐ DARK" : "☼ LIGHT"}
-          </button>
-        </div>
+        <button
+          className="theme-toggle"
+          type="button"
+          onClick={onToggleTheme}
+          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+        >
+          {theme === "light" ? "DARK MODE" : "LIGHT MODE"}
+        </button>
       </header>
 
-      <section className="intro">
-        <div className="intro-copy">
-          <p className="eyebrow">GET READY</p>
+      <section className="launch-panel" aria-labelledby="launch-title">
+        <p className="eyebrow">ROOM {roomCode}</p>
+        <h1 id="launch-title">Launching match</h1>
 
-          <h1>
-            Game starts in
-            <br />
-            <span className="countdown-number">
-              {secondsLeft === null ? "…" : secondsLeft}
-            </span>
-          </h1>
-
-          <p className="intro-description">
-            The crew is locked in. Get ready for the reveal.
-          </p>
+        <div className="launch-countdown" role="timer">
+          {secondsLeft === null ? "…" : secondsLeft}
         </div>
 
-        <aside className="brief-card">
-          <div className="brief-topline">
-            <span>ROOM</span>
-            <span className="brief-index">{roomCode}</span>
-          </div>
-
-          <div className="brief-rule" />
-
-          <p className="brief-label">WHAT HAPPENS NEXT</p>
-
-          <p className="brief-text">
-            Countdown.
-            <br />
-            Role reveal.
-            <br />
-            Then debug.
-          </p>
-
-          <div className="brief-bottom">
-            <span className="brief-square" />
-            <span>TRUST NO ONE</span>
-          </div>
-        </aside>
+        {roomActions}
       </section>
-
-      {roomActions}
-
-      <footer className="footer">
-        <span>GHOST WRITER / BUILD 001</span>
-        <span>NO ONE DEBUGS ALONE</span>
-      </footer>
     </main>
   );
 }

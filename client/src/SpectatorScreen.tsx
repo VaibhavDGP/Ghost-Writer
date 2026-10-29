@@ -176,7 +176,7 @@ function LiveCode({
     <Editor
       height="100%"
       language="cpp"
-      theme="vs-dark"
+      theme="ghost-dark"
       path={`file:///ghost-writer/spectator/${matchId}/main.cpp`}
       defaultValue={source}
       onMount={(instance) => {

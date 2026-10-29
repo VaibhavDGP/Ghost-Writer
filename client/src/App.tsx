@@ -4,6 +4,7 @@ import GameStartSequence from "./GameStartSequence";
 import MatchResults, { type MatchSummary } from "./MatchResults";
 import { FullscreenSetup } from "./FullscreenControls";
 import HackerSettings from "./HackerSettings";
+import EntryScreen from "./EntryScreen";
 import {
   clearPendingJoin,
   clearStoredRoom,
@@ -743,178 +744,16 @@ function App() {
     );
   }
 
-  return (
-    <main className="page-shell">
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="Ghost Writer home">
-          <span className="brand-mark" aria-hidden="true">GW</span>
-          <span>GHOST WRITER</span>
-        </a>
-
-        <div className="topbar-right">
-          <span className="online-mark">
-            <span className="online-dot" />
-            MULTIPLAYER DEBUGGING
-          </span>
-          <button
-            className="theme-toggle"
-            type="button"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-          >
-            {theme === "light" ? "◐ DARK" : "☼ LIGHT"}
-          </button>
-        </div>
-      </header>
-
-      <section className="intro">
-        <div className="intro-copy">
-          <p className="eyebrow">A game of bugs, teamwork, and betrayal</p>
-          <h1>
-            Find the bug.
-            <br />
-            <span>Find the ghost.</span>
-          </h1>
-          <p className="intro-description">
-            Work together to repair the code before time runs out. One player
-            has a different plan.
-          </p>
-
-          <div className="round-stamp" aria-label="Two to eight players">
-            <span>2–8</span>
-            <small>PLAYERS</small>
-          </div>
-        </div>
-
-        <aside className="brief-card">
-          <div className="brief-topline">
-            <span>ROUND BRIEF</span>
-            <span className="brief-index">NO. 001</span>
-          </div>
-          <div className="brief-rule" />
-          <p className="brief-label">YOUR OBJECTIVE</p>
-          <p className="brief-text">
-            Debug the code.
-            <br />
-            Trust your crew.
-            <br />
-            Watch for sabotage.
-          </p>
-          <div className="brief-bottom">
-            <span className="brief-square" />
-            <span>THE BUILD IS UNSTABLE</span>
-          </div>
-        </aside>
-      </section>
-
-      <section className="room-desk" aria-label="Room options">
-        <div className="desk-heading">
-          <span className="desk-number">01</span>
-          <h2>Get your crew together</h2>
-          <span className="desk-caption">Choose your entry point</span>
-        </div>
-
-        <div className="forms-grid">
-          <form
-            className="room-form create-form"
-            onSubmit={(event) => void submitRoom(event, "create")}
-          >
-            <div className="form-title-row">
-              <span className="form-glyph" aria-hidden="true">+</span>
-              <h3>Start a new room</h3>
-            </div>
-            <label htmlFor="create-name">Player name</label>
-            <input
-              id="create-name"
-              name="displayName"
-              type="text"
-              maxLength={40}
-              placeholder="What should we call you?"
-              autoComplete="nickname"
-              required
-            />
-            <button
-              className="action-button primary-button"
-              type="submit"
-              disabled={busy !== null}
-            >
-              {busy === "create" ? "SETTING UP ROOM…" : "CREATE ROOM"}
-              <span aria-hidden="true">↗</span>
-            </button>
-            <p className="form-note">
-              You’ll host the room and invite the rest.
-            </p>
-          </form>
-
-          <div className="form-divider" aria-hidden="true">
-            <span>OR</span>
-          </div>
-
-          <form
-            className="room-form join-form"
-            onSubmit={(event) => void submitRoom(event, "join")}
-          >
-            <div className="form-title-row">
-              <span className="form-glyph join-glyph" aria-hidden="true">↳</span>
-              <h3>Join your crew</h3>
-            </div>
-            <label htmlFor="join-name">Player name</label>
-            <input
-              id="join-name"
-              name="displayName"
-              type="text"
-              maxLength={40}
-              placeholder="What should we call you?"
-              autoComplete="nickname"
-              required
-            />
-            <label htmlFor="room-code">Room code</label>
-            <input
-              id="room-code"
-              className="room-code-input"
-              name="roomCode"
-              type="text"
-              maxLength={6}
-              placeholder="A1B2C3"
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => {
-                event.currentTarget.value = event.currentTarget.value
-                  .toUpperCase()
-                  .replace(/[^0-9A-F]/g, "")
-                  .slice(0, 6);
-              }}
-              required
-            />
-            <button
-              className="action-button secondary-button"
-              type="submit"
-              disabled={busy !== null}
-            >
-              {busy === "join" ? "JOINING ROOM…" : "JOIN ROOM"}
-              <span aria-hidden="true">→</span>
-            </button>
-          </form>
-        </div>
-
-        {notice && (
-          <div
-            className={`notice notice-${notice.kind}`}
-            role={notice.kind === "error" ? "alert" : "status"}
-          >
-            <span className="notice-icon" aria-hidden="true">
-              {notice.kind === "error" ? "!" : "✓"}
-            </span>
-            <span>{notice.text}</span>
-          </div>
-        )}
-      </section>
-
-      <footer className="footer">
-        <span>GHOST WRITER / BUILD 001</span>
-        <span>NO ONE DEBUGS ALONE</span>
-      </footer>
-    </main>
+    return (
+    <EntryScreen
+      theme={theme}
+      busy={busy}
+      notice={notice}
+      onToggleTheme={toggleTheme}
+      onSubmit={(event, action) => {
+        void submitRoom(event, action);
+      }}
+    />
   );
 }
 

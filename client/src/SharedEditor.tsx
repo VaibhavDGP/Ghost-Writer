@@ -238,7 +238,7 @@ export default function SharedEditor(props: Props) {
     <Editor
       height="100%"
       language="cpp"
-      theme={props.theme === "dark" ? "vs-dark" : "light"}
+     theme={props.theme === "dark" ? "ghost-dark" : "ghost-light"}
       path={`file:///ghost-writer/shared/${props.snapshot.matchId}/main.cpp`}
       defaultValue={layout(props.snapshot).source}
       onMount={(instance) => {
