@@ -72,6 +72,10 @@ const SCRIPT = ACTIVE_PLAYER_LUA + `
   local p = cjson.decode(ARGV[3])
   local mode = ARGV[2]
 
+  if mode ~= "READ" and room.judgePause then
+    return cjson.encode({outcome="JUDGE_UNAVAILABLE"})
+  end
+
   local clock = redis.call("TIME")
   local nowMs = tonumber(clock[1]) * 1000 +
     math.floor(tonumber(clock[2]) / 1000)

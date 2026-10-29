@@ -11,6 +11,7 @@ interface View {
   matchId: string;
   codeVersion: number;
   tokensRemaining?: number;
+    judgePaused?: boolean;
   cooldownRemainingMs?: number;
   mutations?: Choice[];
 }
@@ -133,12 +134,18 @@ export default function MatchActions({
     };
   }, [roomCode, role]);
 
-  const stale = Boolean(
+    const stale = Boolean(
     view &&
-      (view.matchId !== matchId || view.codeVersion !== codeVersion),
+      (
+        view.matchId !== matchId ||
+        view.codeVersion !== codeVersion ||
+        view.judgePaused
+      ),
   );
 
-    const elapsedSinceRefresh = Math.max(0, now - receivedAt);
+    const elapsedSinceRefresh = view?.judgePaused
+    ? 0
+    : Math.max(0, now - receivedAt);
 
   const cooldownSeconds = Math.ceil(
     Math.max(

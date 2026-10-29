@@ -48,6 +48,11 @@ export interface Room {
   codingStartsAt?: number;
   matchEndsAt?: number;
   meetingPausedMs?: number;
+    judgePause?: {
+    since: number;
+    appliedAt: number;
+    remainingMs: number;
+  };
 
   meeting?: {
     id: string;

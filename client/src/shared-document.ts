@@ -14,8 +14,9 @@ export interface SharedSnapshot {
   revision: number;
   codeVersion: number;
   playerId: string;
-  editable: boolean;
+    editable: boolean;
   paused: boolean;
+  judgePaused?: boolean;
   parts: string[];
   names: string[];
   functions: Record<string, SharedFunction>;

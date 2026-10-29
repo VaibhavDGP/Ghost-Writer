@@ -28,7 +28,8 @@ export type SaveRepairResult =
         | "STALE_VERSION"
         | "OBJECTIVE_REGRESSION"
         | "NO_PROGRESS"
-        | "INVALID_OBJECTIVE";
+                | "INVALID_OBJECTIVE"
+        | "JUDGE_UNAVAILABLE";
     };
 
 const SAVE_REPAIR_SCRIPT = ACTIVE_PLAYER_LUA + `
@@ -44,7 +45,11 @@ const SAVE_REPAIR_SCRIPT = ACTIVE_PLAYER_LUA + `
 
   local room = cjson.decode(data)
   if room.phase ~= "IN_PROGRESS" or not room.challenge then
-    return cjson.encode({ outcome = "NOT_STARTED" })
+    return cjson.encode({outcome = "NOT_STARTED"})
+  end
+
+    if room.judgePause then
+    return cjson.encode({outcome="JUDGE_UNAVAILABLE"})
   end
 
   local isMember = false

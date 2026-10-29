@@ -156,6 +156,13 @@ async function authorize(
     throw new QueueError(409, "The match changed or ended.");
   }
 
+    if (room.judgePause) {
+    throw new QueueError(
+      503,
+      "Code validation is temporarily unavailable. The coding timer is paused. Retry after recovery.",
+    );
+  }
+
   const member = room.players.find(
     (player) => player.id === session.player.id,
   );

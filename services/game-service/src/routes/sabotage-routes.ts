@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { Router, type Response } from "express";
-import { judgePublicDraft } from "../../../../workers/code-judge/judge.mjs";
+import {
+  judgeWithAvailability as judgePublicDraft,
+} from "../services/judge-availability.js";
 import { acquireJudgeSlot } from "../services/judge-slot.js";
 import { splitFunctions } from "../services/function-document.js";
 import {
@@ -112,6 +114,7 @@ sabotageRouter.get("/:code/sabotage", async (req, res) => {
       matchId: challenge.matchId,
       codeVersion: challenge.codeVersion,
       tokensRemaining: economy.tokens,
+            judgePaused: Boolean(room.judgePause),
       cooldownRemainingMs: Math.max(
         0,
         economy.nextAllowedAt -

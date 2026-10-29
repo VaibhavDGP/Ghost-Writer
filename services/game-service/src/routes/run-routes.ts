@@ -1,5 +1,7 @@
 import { Router } from "express";
-import { judgePublicDraft } from "../../../../workers/code-judge/judge.mjs";
+import {
+  judgeWithAvailability as judgePublicDraft,
+} from "../services/judge-availability.js";
 import { acquireJudgeSlot } from "../services/judge-slot.js";
 import {
   getPlayerRole,

@@ -53,7 +53,9 @@ const READ_TIMED_ROOM_SCRIPT = SETTLE_VOTE_LUA + `
   local room = cjson.decode(raw)
   local deadline = tonumber(room.matchEndsAt)
 
-  if room.phase == "IN_PROGRESS" and deadline and nowMs >= deadline then
+    if room.phase == "IN_PROGRESS" and
+     not room.judgePause and
+     deadline and nowMs >= deadline then
     local expiresAt = deadline + 60000
 
     if nowMs >= expiresAt then

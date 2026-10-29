@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { FullscreenButton } from "./FullscreenControls";
 import HackerChat from "./HackerChat";
+import JudgeOutageBanner from "./JudgeOutageBanner";
 import "./MeetingPanel.css";
 import SpectatorScreen from "./SpectatorScreen";
 interface Ballot {
@@ -33,6 +34,8 @@ interface Snapshot {
   serverNowMs: number;
   codingStartsAt: number;
   matchEndsAt: number;
+    judgePaused?: boolean;
+  judgeRemainingMs?: number | null;
     remainingCalls: number;
   canCall: boolean;
   twoPlayerMode?: boolean;
@@ -278,6 +281,10 @@ export default function MeetingPanel({
     ? sample.data.serverNowMs + Math.max(0, now - sample.receivedAt)
     : 0;
 
+      const codingRemainingMs = data?.judgePaused
+    ? Math.max(0, data.judgeRemainingMs ?? 0)
+    : Math.max(0, (data?.matchEndsAt ?? 0) - serverNow);
+
   const votingOpen = Boolean(
     meeting &&
     !revealing &&
@@ -427,12 +434,14 @@ export default function MeetingPanel({
 
   return (
     <section className="gw-info-panel" aria-label="Match timer and meetings">
-      <p className="gm-match-clock" role="timer">
+            <p className="gm-match-clock" role="timer">
         {!data
           ? "Synchronizing match…"
           : meeting
             ? `Coding paused · ${time(meeting.pausedRemainingMs)} remaining`
-            : `Time remaining: ${time(data.matchEndsAt - serverNow)}`}
+            : data.judgePaused
+              ? `Judge unavailable · ${time(codingRemainingMs)} remaining`
+              : `Time remaining: ${time(codingRemainingMs)}`}
       </p>
 
             {data && (
@@ -475,6 +484,7 @@ export default function MeetingPanel({
         aria-labelledby={titleId}
         onCancel={(event) => event.preventDefault()}
       >
+                <JudgeOutageBanner paused={data?.judgePaused === true} />
         <header className="gm-header">
           <div>
             <p className="gm-eyebrow">
@@ -776,7 +786,7 @@ export default function MeetingPanel({
             players={data.players}
             source={data.officialSource ?? ""}
             revision={data.codeVersion}
-            remainingMs={data.matchEndsAt - serverNow}
+            remainingMs={codingRemainingMs}
             lastDecision={result ? resultText(result) : null}
           >
             {feedback}

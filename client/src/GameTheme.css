@@ -1321,3 +1321,28 @@ html[data-theme] .gw-fullscreen-dialog {
     flex: 1 1 150px;
   }
 }
+
+.gw-judge-outage {
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  border: 2px solid var(--ui-yellow);
+  border-radius: 12px;
+  background: var(--ui-warning-bg);
+  color: var(--ui-warning-text);
+}
+
+.gw-judge-outage > strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.gw-judge-outage > p {
+  margin: 8px 0 0;
+  color: inherit;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.gm-dialog > .gw-judge-outage {
+  margin: 14px;
+}

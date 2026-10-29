@@ -627,6 +627,7 @@ const START_ROOM_SCRIPT = `
   end
 
       room.phase = "IN_PROGRESS"
+        room.judgePause = nil
   room.twoPlayerMode = #room.players == 2
   room.countdownEndsAt = nowMs + 10000
   room.codingStartsAt = room.countdownEndsAt + 5000

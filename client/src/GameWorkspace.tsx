@@ -3,6 +3,7 @@ import SharedEditor from "./SharedEditor";
 import MatchActions from "./MatchActions";
 import MeetingPanel from "./MeetingPanel";
 import HackerChat from "./HackerChat";
+import JudgeOutageBanner from "./JudgeOutageBanner";
 import { FullscreenButton } from "./FullscreenControls";
 import DraftRecovery from "./DraftRecovery";
 import JudgeQueueStatus from "./JudgeQueueStatus";
@@ -80,8 +81,9 @@ export default function GameWorkspace({
     busy !== "submit",
   );
 
-  const canAct = Boolean(
+    const canAct = Boolean(
     snapshot?.editable &&
+    !snapshot.judgePaused &&
     live.connected &&
     !live.dirty &&
     !live.saving &&
@@ -220,6 +222,7 @@ export default function GameWorkspace({
 
       {roomError && <p className="gw-warning">{roomError}</p>}
 
+      <JudgeOutageBanner paused={snapshot?.judgePaused === true} />
                 <JudgeQueueStatus
         roomCode={roomCode}
         matchId={snapshot?.matchId}

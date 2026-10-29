@@ -11,6 +11,10 @@ import { presenceRouter } from "./routes/presence-routes.js";
 import { hackerRouter } from "./routes/hacker-routes.js";
 import { sharedDocumentRouter } from "./routes/shared-document-routes.js";
 import { judgeQueueRouter } from "./services/judge-slot.js";
+import {
+  judgeAvailabilityRouter,
+  startJudgeMonitor,
+} from "./services/judge-availability.js";
 import { startPresenceSweeper } from "./stores/presence-store.js";
 import { attachSharedRealtime } from "./real-time.js";
 
@@ -26,14 +30,12 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// Queue before preparing/fixing a repair validation snapshot.
+app.use("/rooms", judgeAvailabilityRouter);
 app.use("/rooms", judgeQueueRouter);
 
 app.use("/rooms", presenceRouter);
 app.use("/rooms", meetingRouter);
 app.use("/rooms", hackerRouter);
-
-// Constructs the trusted repair candidate when its queue turn begins.
 app.use("/rooms", sharedDocumentRouter);
 
 app.use("/rooms", roomRouter);
@@ -47,6 +49,8 @@ async function startServer() {
   await redis.connect();
   console.log("Connected to Redis");
 
+  const stopJudgeMonitor = await startJudgeMonitor();
+
   const server = app.listen(PORT, () => {
     console.log(`Game Service running at http://localhost:${PORT}`);
   });
@@ -54,7 +58,11 @@ async function startServer() {
   attachSharedRealtime(server);
 
   const stopPresenceSweeper = startPresenceSweeper();
-  server.on("close", stopPresenceSweeper);
+
+  server.on("close", () => {
+    stopPresenceSweeper();
+    stopJudgeMonitor();
+  });
 }
 
 startServer().catch((error) => {

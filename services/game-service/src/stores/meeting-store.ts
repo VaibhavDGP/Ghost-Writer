@@ -252,8 +252,12 @@ if changed then
   redis.call("SET", KEYS[1], cjson.encode(room), "KEEPTTL")
   redis.call("SET", KEYS[4], cjson.encode(private), "KEEPTTL")
 
-  for _, key in ipairs(KEYS) do
-    redis.call("PEXPIREAT", key, room.matchEndsAt + 60000)
+    for _, key in ipairs(KEYS) do
+    if room.judgePause then
+      redis.call("PERSIST", key)
+    else
+      redis.call("PEXPIREAT", key, room.matchEndsAt + 60000)
+    end
   end
 end
 
@@ -355,7 +359,10 @@ return cjson.encode({
   snapshot={
     matchId=room.challenge.matchId,
     playerId=playerId,
-    serverNowMs=now,
+        serverNowMs=now,
+    judgePaused=room.judgePause ~= nil,
+    judgeRemainingMs=room.judgePause and
+      room.judgePause.remainingMs or cjson.null,
     codingStartsAt=room.codingStartsAt,
     matchEndsAt=room.matchEndsAt,
         twoPlayerMode=twoPlayerMode,

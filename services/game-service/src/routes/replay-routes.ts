@@ -55,6 +55,7 @@ const REPLAY_SCRIPT = SETTLE_VOTE_LUA + `
   end
 
   room.phase = "LOBBY"
+    room.judgePause = nil
   room.challenge = nil
   room.results = nil
   room.countdownEndsAt = nil

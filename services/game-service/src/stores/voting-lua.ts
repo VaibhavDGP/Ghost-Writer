@@ -248,9 +248,12 @@ local function gwSettleVote()
       room.results.expiresAt or room.matchEndsAt + 60000
 
     for _, key in ipairs(KEYS) do
-      redis.call("PEXPIREAT", key, expiresAt)
-    end
-  end
+      if room.phase == "IN_PROGRESS" and room.judgePause then
+        redis.call("PERSIST", key)
+      else
+        redis.call("PEXPIREAT", key, expiresAt)
+      end
+    end  end
 
   gwPresence(nil, false)
 end
