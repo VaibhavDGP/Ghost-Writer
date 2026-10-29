@@ -4,6 +4,7 @@ import MatchActions from "./MatchActions";
 import MeetingPanel from "./MeetingPanel";
 import HackerChat from "./HackerChat";
 import { FullscreenButton } from "./FullscreenControls";
+import JudgeQueueStatus from "./JudgeQueueStatus";
 import {
   postJSON,
   sourceOf,
@@ -218,6 +219,11 @@ export default function GameWorkspace({
 
       {roomError && <p className="gw-warning">{roomError}</p>}
 
+                <JudgeQueueStatus
+        roomCode={roomCode}
+        matchId={snapshot?.matchId}
+      />
+
       {!snapshot ? (
         <section className="gw-load-message">
           <p>{live.error ?? "Connecting to the shared document…"}</p>
@@ -243,7 +249,7 @@ export default function GameWorkspace({
                   onClick={() => void run()}
                   disabled={!canAct}
                 >
-                  {busy === "run" ? "RUNNING…" : "RUN PUBLIC TESTS"}
+                  {busy === "run" ? "PROCESSING…" : "RUN PUBLIC TESTS"}
                 </button>
 
                 {role === "CODER" && (
@@ -253,8 +259,8 @@ export default function GameWorkspace({
                     disabled={!canAct || !ownedName}
                   >
                     {busy === "submit" || owned?.checking
-                      ? "CHECKING…"
-                      : "SUBMIT REPAIR"}
+  ? "PROCESSING…"
+  : "SUBMIT REPAIR"}
                   </button>
                 )}
               </div>

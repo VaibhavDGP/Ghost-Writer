@@ -175,7 +175,7 @@ sabotageRouter.post("/:code/sabotage", async (req, res) => {
 
   const code = req.params.code.toUpperCase();
   const tokenHash = res.locals.tokenHash as string;
-  const release = acquireJudgeSlot();
+    const release = acquireJudgeSlot(res);
 
   if (!release) {
     res.status(429).json({

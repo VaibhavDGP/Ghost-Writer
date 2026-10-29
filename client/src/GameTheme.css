@@ -1191,3 +1191,46 @@ html[data-theme] .gw-fullscreen-dialog {
   font-size: 0.95rem;
   overflow-wrap: anywhere;
 }
+
+.gw-judge-status {
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  border: 2px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-inset);
+  color: var(--ui-text);
+}
+
+.gw-judge-status.is-pending {
+  border-color: var(--ui-accent);
+}
+
+.gw-judge-status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gw-judge-status-heading > strong {
+  font-size: 0.95rem;
+}
+
+.gw-judge-status-heading > span {
+  padding: 5px 9px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 7px;
+  background: var(--ui-raised);
+  color: var(--ui-accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.gw-judge-status > p {
+  margin: 10px 0 0;
+  color: var(--ui-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}

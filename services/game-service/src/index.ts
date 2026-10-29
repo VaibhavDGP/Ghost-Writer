@@ -10,6 +10,7 @@ import { meetingRouter } from "./routes/meeting-routes.js";
 import { presenceRouter } from "./routes/presence-routes.js";
 import { hackerRouter } from "./routes/hacker-routes.js";
 import { sharedDocumentRouter } from "./routes/shared-document-routes.js";
+import { judgeQueueRouter } from "./services/judge-slot.js";
 import { startPresenceSweeper } from "./stores/presence-store.js";
 import { attachSharedRealtime } from "./real-time.js";
 
@@ -25,11 +26,14 @@ app.get("/health", (_req, res) => {
   });
 });
 
+// Queue before preparing/fixing a repair validation snapshot.
+app.use("/rooms", judgeQueueRouter);
+
 app.use("/rooms", presenceRouter);
 app.use("/rooms", meetingRouter);
 app.use("/rooms", hackerRouter);
 
-// Must run before submitRouter.
+// Constructs the trusted repair candidate when its queue turn begins.
 app.use("/rooms", sharedDocumentRouter);
 
 app.use("/rooms", roomRouter);

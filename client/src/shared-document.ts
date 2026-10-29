@@ -85,7 +85,9 @@ export function sourceOf(snapshot: SharedSnapshot): string {
 export async function postJSON<T>(
   path: string,
   body: unknown,
-  timeoutMs = 120_000,
+  timeoutMs = /\/(?:run|submit)$/.test(path)
+    ? 600_000
+    : 120_000,
 ): Promise<T> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);

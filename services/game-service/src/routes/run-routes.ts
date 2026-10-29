@@ -140,7 +140,7 @@ runRouter.post("/:code/run", async (req, res) => {
       return;
     }
 
-    releaseJudgeSlot = acquireJudgeSlot();
+        releaseJudgeSlot = acquireJudgeSlot(res);
 
     if (releaseJudgeSlot === null) {
       res.set("Retry-After", "2");

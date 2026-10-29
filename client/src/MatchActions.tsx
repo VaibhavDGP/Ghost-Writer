@@ -272,11 +272,15 @@ export default function MatchActions({
               onClick={() => void send(pending)}
               disabled={sending}
             >
-              {sending ? "VERIFYING…" : "RETRY PENDING SABOTAGE"}
+                            {sending ? "PROCESSING…" : "RETRY PENDING SABOTAGE"}
             </button>
           )}
 
-          {sending && <p role="status">Verifying the approved mutation…</p>}
+                    {sending && (
+            <p role="status">
+              Request sent. Follow its queue status above.
+            </p>
+          )}
         </>
       )}
 
