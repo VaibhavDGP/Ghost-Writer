@@ -1234,3 +1234,90 @@ html[data-theme] .gw-fullscreen-dialog {
   font-size: 0.9rem;
   line-height: 1.5;
 }
+
+.gw-recovery-panel {
+  margin: 0 0 22px;
+  padding: 20px;
+  border: 2px solid var(--ui-border-strong);
+  border-radius: 14px;
+  background: var(--ui-inset);
+  color: var(--ui-text);
+}
+
+.gw-recovery-heading,
+.gw-recovery-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.gw-recovery-heading h2 {
+  margin: 5px 0 0;
+  font-size: 1.15rem;
+}
+
+.gw-recovery-heading .eyebrow {
+  margin: 0;
+}
+
+.gw-recovery-function {
+  max-width: 100%;
+  padding: 7px 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-raised);
+  color: var(--ui-accent);
+  font-family: Consolas, "Courier New", monospace;
+  overflow-wrap: anywhere;
+}
+
+.gw-recovery-panel > p {
+  line-height: 1.6;
+}
+
+.gw-recovery-panel textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 190px;
+  margin: 16px 0;
+  padding: 14px;
+  resize: vertical;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 9px;
+  background: var(--ui-background);
+  color: var(--ui-text);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  tab-size: 4;
+}
+
+.gw-recovery-panel textarea:focus {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.gw-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gw-recovery-notice p {
+  flex: 1;
+  margin: 0;
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .gw-recovery-panel {
+    padding: 15px;
+  }
+
+  .gw-recovery-actions > button {
+    flex: 1 1 150px;
+  }
+}

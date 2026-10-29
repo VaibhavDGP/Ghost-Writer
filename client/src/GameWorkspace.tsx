@@ -4,6 +4,7 @@ import MatchActions from "./MatchActions";
 import MeetingPanel from "./MeetingPanel";
 import HackerChat from "./HackerChat";
 import { FullscreenButton } from "./FullscreenControls";
+import DraftRecovery from "./DraftRecovery";
 import JudgeQueueStatus from "./JudgeQueueStatus";
 import {
   postJSON,
@@ -224,6 +225,8 @@ export default function GameWorkspace({
         matchId={snapshot?.matchId}
       />
 
+            <DraftRecovery live={live} />
+
       {!snapshot ? (
         <section className="gw-load-message">
           <p>{live.error ?? "Connecting to the shared document…"}</p>
@@ -388,18 +391,7 @@ export default function GameWorkspace({
               </div>
             )}
 
-            {live.recovery !== null && (
-              <details className="gw-run-results" open>
-                <summary>Preserved unsent function text</summary>
-                <p>Copy this text if you need to recover an unsent edit.</p>
-                <textarea
-                  readOnly
-                  value={live.recovery}
-                  aria-label="Preserved unsent function text"
-                  style={{ width: "100%", minHeight: 160 }}
-                />
-              </details>
-            )}
+            
 
             {notice && <p className="gw-editor-note" role="status">{notice}</p>}
             {error && <pre className="gw-warning gw-shared-message">{error}</pre>}
