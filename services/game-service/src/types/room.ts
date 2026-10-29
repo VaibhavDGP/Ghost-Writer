@@ -13,7 +13,7 @@ export interface Player {
 export interface MatchResults {
   matchId: string;
   winner: "CODERS" | "HACKER";
-    reason:
+  reason:
     | "ALL_REPAIRED"
     | "TIME_EXPIRED"
     | "HACKER_ELIMINATED"
@@ -51,8 +51,12 @@ export interface Room {
     calledByName: string;
     startedAt: number;
     voteStartsAt?: number;
+    voteEndsAt?: number;
+    voteClosedAt?: number;
+    stage?: "VOTING" | "REVEAL" | "FINISHED";
     eligibleIds?: string[];
     settled?: boolean;
+    deferredHackerDeparture?: boolean;
     endsAt: number;
     pausedRemainingMs: number;
   };
@@ -62,10 +66,20 @@ export interface Room {
     outcome: "ELIMINATED" | "TIE" | "NO_VOTES";
     playerId: string | null;
     displayName: string | null;
+    closedAt?: number;
+    revealEndsAt?: number;
+    applied?: boolean;
     tally: {
       playerId: string;
       displayName: string;
       votes: number;
+    }[];
+    ballots?: {
+      voterId: string;
+      voterName: string;
+      targetId: string | null;
+      targetName: string | null;
+      status: "VOTED" | "SKIPPED" | "NO_VOTE";
     }[];
   };
 

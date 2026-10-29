@@ -75,6 +75,15 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
       end
     end
 
+       -- Finish an existing vote reveal before showing match results.
+    if room.meeting and
+       room.meeting.voteClosedAt and
+       at < room.meeting.endsAt then
+      room.meeting.deferredHackerDeparture = true
+      changed = true
+      return
+    end
+
     local challenge = room.challenge
     local economy = private.sabotage or {}
     local paused = room.meetingPausedMs or 0
@@ -199,7 +208,9 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
       end
 
       -- Preserve private role records for the final results.
-      if room.meeting and not room.meeting.settled then
+            if room.meeting and
+         not room.meeting.settled and
+         not room.meeting.voteClosedAt then
         local eligible = {}
 
         for _, id in ipairs(room.meeting.eligibleIds or {}) do

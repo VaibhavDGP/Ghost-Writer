@@ -63,23 +63,66 @@ function randomFor(seed: string) {
 function describe(stage: Stage): string {
   switch (stage.kind) {
     case "discount":
-      return `subtract ${stage.b} when the value is at least ${stage.a}, keeping the result non-negative`;
+      return (
+        `If the current value is ${stage.a} or more, subtract ${stage.b}. ` +
+        `If it is below ${stage.a}, leave it unchanged. ` +
+        `If the subtraction would produce a negative number, use 0 instead.`
+      );
 
     case "scale":
-      return `multiply by ${stage.a}/100 and round down`;
+      return (
+        `Multiply the current value by ${stage.a}, then divide by 100. ` +
+        `Round the result down to a whole number by discarding any decimal part.`
+      );
 
     case "blocks":
-      return `charge ${stage.b} per started block of ${stage.a} (zero blocks for zero)`;
+      return (
+        `Divide the current value into groups of ${stage.a}. ` +
+        `Count a partially filled group as one full group. ` +
+        `Multiply the number of groups by ${stage.b}; this becomes the new value. ` +
+        `If the current value is 0, the result is 0.`
+      );
 
     case "cap":
-      return `limit the value to at most ${stage.a}`;
+      return (
+        `If the current value is greater than ${stage.a}, replace it with ${stage.a}. ` +
+        `Otherwise, leave it unchanged.`
+      );
 
     case "floor":
-      return `raise the value to at least ${stage.a}`;
+      return (
+        `If the current value is less than ${stage.a}, replace it with ${stage.a}. ` +
+        `Otherwise, leave it unchanged.`
+      );
 
     case "bonus":
-      return `add ${stage.b} for every complete group of ${stage.a} in the incoming value`;
+      return (
+        `Count how many complete groups of ${stage.a} fit into the current value. ` +
+        `Ignore any leftover amount. ` +
+        `Multiply that group count by ${stage.b}, then add this amount to the current value. ` +
+        `Count the groups before adding the bonus; do not repeat the calculation.`
+      );
   }
+}
+
+function describePipeline(pipeline: Pipeline): string {
+  const title =
+    pipeline.title.charAt(0).toUpperCase() + pipeline.title.slice(1);
+
+  return [
+    title,
+    "",
+    "Repair the calculation so it follows these steps in order. " +
+      "Each step uses the result of the previous step.",
+    "",
+    "1. Start with the supplied input. If it is below 0, use 0. " +
+      "If it is above 1000, use 1000. Otherwise, keep it unchanged.",
+    ...pipeline.stages.map(
+      (stage, index) => `${index + 2}. ${describe(stage)}`,
+    ),
+    "",
+    "The result after the last step is the expected output.",
+  ].join("\n");
 }
 
 function evaluateStage(
@@ -487,10 +530,7 @@ export function generateProceduralChallenge(
       objectives: pipelines.map((pipeline) => ({
         id: `${pipeline.operation}-rules`,
         required: true,
-        description:
-          `${pipeline.title}: clamp input to 0..1000; then ` +
-          pipeline.stages.map(describe).join("; then ") +
-          ".",
+                description: describePipeline(pipeline),
       })),
 
       publicTests,

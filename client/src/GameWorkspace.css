@@ -407,3 +407,10 @@
   overflow-wrap: anywhere;
   font: inherit;
 }
+
+/* Preserve numbered steps and paragraph breaks in repair instructions. */
+.gw-objective-list p {
+  white-space: pre-line;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
