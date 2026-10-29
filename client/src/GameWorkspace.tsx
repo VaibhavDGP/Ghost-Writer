@@ -46,8 +46,12 @@ export default function GameWorkspace({
   leaving,
   roomError,
 }: Props) {
-  const live = useSharedDocument(roomCode);
+    const live = useSharedDocument(roomCode);
   const snapshot = live.snapshot;
+
+  const currentPlayer = snapshot?.players.find(
+    (player) => player.id === snapshot.playerId,
+  );
 
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState<"run" | "submit" | null>(null);
@@ -196,8 +200,15 @@ export default function GameWorkspace({
 
       <div className="gw-workspace-heading">
         <div>
-          <p className="eyebrow">CODING WORKSPACE</p>
+                   <p className="eyebrow">CODING WORKSPACE</p>
           <h1>Investigate the code.</h1>
+
+          {currentPlayer && (
+            <p className="gw-player-identity">
+              <span>PLAYING AS</span>
+              <strong>{currentPlayer.displayName}</strong>
+            </p>
+          )}
         </div>
 
         <p className={`gw-role-badge ${role === "HACKER" ? "gw-role-hacker" : ""}`}>

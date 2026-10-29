@@ -13,11 +13,13 @@ export interface Player {
 export interface MatchResults {
   matchId: string;
   winner: "CODERS" | "HACKER";
-  reason:
+    reason:
     | "ALL_REPAIRED"
     | "TIME_EXPIRED"
     | "HACKER_ELIMINATED"
-    | "HACKER_LEFT";
+    | "HACKER_LEFT"
+    | "NO_HACKERS"
+    | "HACKER_MAJORITY";
   finishedAt: number;
   expiresAt: number;
   durationMs: number;
@@ -37,6 +39,7 @@ export interface Room {
   code: string;
   hostPlayerId: string;
   hackerCount?: 1 | 2;
+    twoPlayerMode?: boolean;
   phase: "LOBBY" | "IN_PROGRESS" | "RESULTS";
   players: Player[];
   maxPlayers: number;

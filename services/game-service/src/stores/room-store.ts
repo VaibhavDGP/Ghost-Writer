@@ -62,6 +62,7 @@ export type JoinRoomResult =
   | { outcome: "NOT_FOUND" }
   | { outcome: "NOT_IN_LOBBY" }
   | { outcome: "FULL" }
+  | { outcome: "NAME_TAKEN" }
   | { outcome: "REQUEST_CONFLICT" };
 
 function joinRequestsKey(code: string): string {
@@ -102,6 +103,24 @@ const JOIN_ROOM_SCRIPT = `
 
   if #room.players >= room.maxPlayers then
     return cjson.encode({ outcome = "FULL" })
+  end
+
+    -- Compare names inside the atomic join operation.
+  -- Ignore surrounding/repeated spaces and ASCII letter casing.
+  local function nameKey(value)
+    local name = tostring(value or "")
+    name = string.gsub(name, "^%s+", "")
+    name = string.gsub(name, "%s+$", "")
+    name = string.gsub(name, "%s+", " ")
+    return string.lower(name)
+  end
+
+  local requestedName = nameKey(player.displayName)
+
+  for _, existing in ipairs(room.players) do
+    if nameKey(existing.displayName) == requestedName then
+      return cjson.encode({ outcome = "NAME_TAKEN" })
+    end
   end
 
   table.insert(room.players, player)
@@ -315,6 +334,24 @@ const JOIN_ROOM_WITH_SESSION_SCRIPT = `
 
   if #room.players >= room.maxPlayers then
     return cjson.encode({ outcome = "FULL" })
+  end
+
+    -- Compare names inside the atomic join operation.
+  -- Ignore surrounding/repeated spaces and ASCII letter casing.
+  local function nameKey(value)
+    local name = tostring(value or "")
+    name = string.gsub(name, "^%s+", "")
+    name = string.gsub(name, "%s+$", "")
+    name = string.gsub(name, "%s+", " ")
+    return string.lower(name)
+  end
+
+  local requestedName = nameKey(player.displayName)
+
+  for _, existing in ipairs(room.players) do
+    if nameKey(existing.displayName) == requestedName then
+      return cjson.encode({ outcome = "NAME_TAKEN" })
+    end
   end
 
   table.insert(room.players, player)
@@ -589,7 +626,8 @@ const START_ROOM_SCRIPT = `
     player.connected = true
   end
 
-    room.phase = "IN_PROGRESS"
+      room.phase = "IN_PROGRESS"
+  room.twoPlayerMode = #room.players == 2
   room.countdownEndsAt = nowMs + 10000
   room.codingStartsAt = room.countdownEndsAt + 5000
   room.matchEndsAt = room.codingStartsAt + tonumber(ARGV[6])

@@ -64,6 +64,15 @@ state.votes = state.votes or {}
 
 local input = cjson.decode(ARGV[3])
 local mode = ARGV[2]
+local twoPlayerMode = room.twoPlayerMode == true
+
+-- READ remains available for the match timer.
+-- CALL, CHAT, and VOTE are disabled in two-player matches.
+if twoPlayerMode and mode ~= "READ" then
+  return cjson.encode({
+    outcome="MEETINGS_DISABLED_IN_TWO_PLAYER_MATCHES"
+  })
+end
 local active =
   room.meeting and not room.meeting.settled and
   now < room.meeting.endsAt
@@ -349,7 +358,8 @@ return cjson.encode({
     serverNowMs=now,
     codingStartsAt=room.codingStartsAt,
     matchEndsAt=room.matchEndsAt,
-    remainingCalls=3-state.count,
+        twoPlayerMode=twoPlayerMode,
+    remainingCalls=twoPlayerMode and 0 or (3-state.count),
     isSpectator=member.eliminated == true,
     players=players,
     voteCount=voteCount,
@@ -364,7 +374,8 @@ return cjson.encode({
     ) or cjson.null,
     codeVersion=private.collaboration and
       private.collaboration.revision or room.challenge.codeVersion,
-    canCall=not member.eliminated and not active and now >= startsAt and
+        canCall=not twoPlayerMode and
+      not member.eliminated and not active and now >= startsAt and
       not state.called[playerId] and state.count < 3,
     meeting=active and room.meeting or cjson.null,
     messages=messages

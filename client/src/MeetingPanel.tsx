@@ -33,8 +33,9 @@ interface Snapshot {
   serverNowMs: number;
   codingStartsAt: number;
   matchEndsAt: number;
-  remainingCalls: number;
+    remainingCalls: number;
   canCall: boolean;
+  twoPlayerMode?: boolean;
   isSpectator: boolean;
   hasVoted: boolean;
   myVote: string | null;
@@ -434,17 +435,32 @@ export default function MeetingPanel({
             : `Time remaining: ${time(data.matchEndsAt - serverNow)}`}
       </p>
 
-      <button
-        className="copy-button"
-        disabled={!data?.canCall || Boolean(syncError) || sending || Boolean(pending)}
-        onClick={() => action("CALL")}
-      >
-        CALL EMERGENCY MEETING
-      </button>
+            {data && (
+        data.twoPlayerMode ? (
+          <p className="gw-muted">
+            Two-player match · No voting
+          </p>
+        ) : (
+          <>
+            <button
+              className="copy-button"
+              disabled={
+                !data.canCall ||
+                Boolean(syncError) ||
+                sending ||
+                Boolean(pending)
+              }
+              onClick={() => action("CALL")}
+            >
+              CALL EMERGENCY MEETING
+            </button>
 
-      <p className="gw-muted">
-        One call per player · {data?.remainingCalls ?? "…"} meetings left
-      </p>
+            <p className="gw-muted">
+              One call per player · {data.remainingCalls} meetings left
+            </p>
+          </>
+        )
+      )}
 
       {!modal && (
         <>

@@ -4,11 +4,13 @@ import "./MatchResults.css";
 export interface MatchSummary {
   matchId: string;
   winner: "CODERS" | "HACKER";
-  reason:
+    reason:
     | "ALL_REPAIRED"
     | "TIME_EXPIRED"
     | "HACKER_ELIMINATED"
-    | "HACKER_LEFT";
+    | "HACKER_LEFT"
+    | "NO_HACKERS"
+    | "HACKER_MAJORITY";
   finishedAt: number;
   expiresAt: number;
   durationMs: number;
@@ -50,6 +52,12 @@ function resultExplanation(
 
     case "HACKER_ELIMINATED":
       return "The last active hacker was eliminated by the vote.";
+
+    case "NO_HACKERS":
+      return "No active hackers remain. The coders win.";
+
+    case "HACKER_MAJORITY":
+      return "The remaining hackers equal or outnumber the remaining coders.";
 
     case "TIME_EXPIRED":
       return "Time ran out before every required repair was completed.";

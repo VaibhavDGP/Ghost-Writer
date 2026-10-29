@@ -166,6 +166,12 @@ roomRouter.post("/:code/join", async (req, res) => {
         });
         return;
 
+              case "NAME_TAKEN":
+        res.status(409).json({
+          error: "That name is already taken in this room. Please choose another name.",
+        });
+        return;
+
       case "REQUEST_CONFLICT":
         res.status(409).json({
           error: "Retry the join with the original name and session token.",

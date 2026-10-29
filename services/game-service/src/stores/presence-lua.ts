@@ -4,11 +4,11 @@
 // 3. player roles
 // 4. private challenge
 // 5. join requests
-
+import { TEAM_VICTORY_LUA } from "./team-victory-lua.js";
 import { SHARED_DOCUMENT_LUA } from "./shared-document-lua.js";
-
+import { POPULATION_WIN_LUA } from "./population-win-lua.js";
 export const PRESENCE_FUNCTIONS_LUA = SHARED_DOCUMENT_LUA + `
-local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
+local function gwPresenceCleanup(forcedPlayerId, stopAtMeetingEnd)
   local raw = redis.call("GET", KEYS[1])
   if not raw then return end
 
@@ -56,8 +56,12 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     return players
   end
 
-  local function finishForHackerDeparture(at, departingId)
+    local function finishForHackerDeparture(at, departingId)
     if room.phase ~= "IN_PROGRESS" or not room.challenge then
+      return
+    end
+
+    if room.twoPlayerMode then
       return
     end
 
@@ -333,4 +337,4 @@ local function gwPresence(forcedPlayerId, stopAtMeetingEnd)
     end
   end
 end
-`;
+` + POPULATION_WIN_LUA;
