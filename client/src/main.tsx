@@ -5,6 +5,7 @@ import App from "./App.tsx";
 
 // Keep this after App and the existing styles.
 import "./GameTheme.css";
+import "./GameColors.css";
 
 // Apply the saved theme before the first React render.
 try {

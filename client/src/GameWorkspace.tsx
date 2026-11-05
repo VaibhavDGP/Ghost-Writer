@@ -193,7 +193,7 @@ export default function GameWorkspace({
           </button>
 
           <button
-            className="copy-button"
+            className=	"copy-button ui-danger"
             onClick={onLeave}
             disabled={leaving}
           >
@@ -251,7 +251,7 @@ export default function GameWorkspace({
 
               <div className="gw-draft-actions">
                 <button
-                  className="copy-button"
+                  className="copy-button ui-info"
                   onClick={() => void run()}
                   disabled={!canAct}
                 >
@@ -260,7 +260,7 @@ export default function GameWorkspace({
 
                 {role === "CODER" && (
                   <button
-                    className="copy-button"
+                    className=	"copy-button ui-positive"
                     onClick={() => void submit()}
                     disabled={!canAct || !ownedName}
                   >
@@ -316,7 +316,7 @@ export default function GameWorkspace({
                   </select>
 
                   <button
-                    className="copy-button"
+                    className="copy-button ui-positive"
                     onClick={() => void acquire()}
                     disabled={!canAct || !chosen || Boolean(snapshot.functions[chosen]?.ownerId)}
                   >
@@ -351,12 +351,13 @@ export default function GameWorkspace({
 
             <div className="gw-editor-container">
               <SharedEditor
-                snapshot={snapshot}
-                theme={theme}
-                editable={canEdit}
-                onEdit={(name, body) => live.connection?.edit(name, body)}
-                onWarning={setError}
-              />
+  snapshot={snapshot}
+  theme={theme}
+  editable={canEdit}
+  selectedFunction={selected}
+  onEdit={(name, body) => live.connection?.edit(name, body)}
+  onWarning={setError}
+/>
             </div>
 
             <div className="gw-editor-footer">

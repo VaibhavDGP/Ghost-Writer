@@ -452,7 +452,7 @@ export default function MeetingPanel({
         ) : (
           <>
             <button
-              className="copy-button"
+              className="copy-button ui-warning"
               disabled={
                 !data.canCall ||
                 Boolean(syncError) ||
@@ -802,7 +802,7 @@ export default function MeetingPanel({
                 : "Spectator mode"}
           </span>
           <button
-            className="gm-button gm-leave"
+            className="copy-button ui-danger"
             onClick={onLeave}
             disabled={leaving}
           >

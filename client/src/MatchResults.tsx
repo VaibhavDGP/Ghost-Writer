@@ -242,7 +242,7 @@ export default function MatchResults({
           )}
 
           <button
-            className="copy-button"
+            className=	"copy-button ui-danger"
             type="button"
             onClick={onLeave}
             disabled={busy || leaving || returning}

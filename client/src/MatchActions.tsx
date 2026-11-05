@@ -242,7 +242,7 @@ export default function MatchActions({
           {view?.mutations?.map((choice) => (
             <div key={choice.id} style={{ marginBottom: 16 }}>
               <button
-                className="copy-button"
+                className="copy-button ui-danger"
                 type="button"
                 disabled={
                   sending ||

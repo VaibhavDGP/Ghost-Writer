@@ -1,4 +1,5 @@
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import GameArtwork from "./GameArtwork";
 
 interface Props {
   theme: "light" | "dark";
@@ -14,62 +15,6 @@ interface Props {
   ) => void;
 }
 
-function GhostEmblem() {
-  return (
-    <svg
-      className="entry-emblem"
-      viewBox="0 0 180 180"
-      aria-hidden="true"
-    >
-      <circle
-        cx="90"
-        cy="90"
-        r="76"
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity="0.16"
-        strokeWidth="2"
-      />
-      <circle
-        cx="90"
-        cy="90"
-        r="62"
-        fill="currentColor"
-        fillOpacity="0.05"
-      />
-      <path
-        d="M56 82Q56 38 94 38Q133 38 133 82V142L115 131L97 145L78 131L56 143Z"
-        fill="currentColor"
-        fillOpacity="0.13"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M82 61Q104 54 126 65V91Q104 100 80 88Q73 73 82 61Z"
-        fill="currentColor"
-        fillOpacity="0.35"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        d="M89 67Q103 63 116 68"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M26 48V60M20 54H32M148 119V131M142 125H154"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        opacity="0.55"
-      />
-    </svg>
-  );
-}
-
 export default function EntryScreen({
   theme,
   busy,
@@ -77,11 +22,15 @@ export default function EntryScreen({
   onToggleTheme,
   onSubmit,
 }: Props) {
+  const [mode, setMode] = useState<"create" | "join">("create");
+
   return (
-    <main className="page-shell entry-screen">
+    <main className="page-shell game-entry">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">GW</span>
+          <span className="brand-mark" aria-hidden="true">
+            {"</>"}
+          </span>
           <span>GHOST WRITER</span>
         </div>
 
@@ -89,113 +38,145 @@ export default function EntryScreen({
           className="theme-toggle"
           type="button"
           onClick={onToggleTheme}
-          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+          aria-label={`Switch to ${
+            theme === "light" ? "dark" : "light"
+          } mode`}
         >
           {theme === "light" ? "DARK MODE" : "LIGHT MODE"}
         </button>
       </header>
 
-      <section className="entry-hero" aria-labelledby="entry-title">
-        <div>
-          <span className="entry-player-count">2–8 PLAYERS</span>
+      <div className="game-entry-layout">
+        <section className="game-entry-hero" aria-labelledby="entry-title">
+          <p className="game-kicker">
+            <span aria-hidden="true" />
+            2–8 PLAYERS · SOCIAL DEDUCTION
+          </p>
+
           <h1 id="entry-title">
             GHOST
-            <span>WRITER</span>
+            <span>WRITER<span className="title-dot">.</span></span>
           </h1>
-        </div>
-        <GhostEmblem />
-      </section>
 
-      <section className="entry-forms" aria-label="Create or join a room">
-        <form
-          className="entry-form"
-          onSubmit={(event) => onSubmit(event, "create")}
-        >
-          <div className="entry-form-heading">
-            <span className="entry-form-icon" aria-hidden="true">+</span>
-            <h2>Create a room</h2>
+          <p className="game-tagline">
+            Good code. Bad company.
+          </p>
+
+          <GameArtwork />
+
+          <div className="game-hero-footer">
+            <span className="game-orbit-mark" aria-hidden="true">✦</span>
+            <span>TRUST IS THE REAL BUG.</span>
+          </div>
+        </section>
+
+        <section className="game-boarding" aria-label="Create or join a room">
+          <div className="game-boarding-heading">
+            <span className="game-section-number" aria-hidden="true">01</span>
+            <div>
+              <p className="game-kicker">YOUR NEXT MATCH</p>
+              <h2>Get your crew together.</h2>
+            </div>
           </div>
 
-          <label htmlFor="create-name">Player name</label>
-          <input
-            id="create-name"
-            name="displayName"
-            type="text"
-            maxLength={40}
-            placeholder="Enter your name"
-            autoComplete="nickname"
-            required
-          />
+          <div className="game-mode-switch" aria-label="Room action">
+            <button
+              type="button"
+              className={mode === "create" ? "is-selected" : ""}
+              aria-pressed={mode === "create"}
+              disabled={busy !== null}
+              onClick={() => setMode("create")}
+            >
+              Create a room
+            </button>
 
-          <button
-            className="action-button primary-button"
-            type="submit"
-            disabled={busy !== null}
-          >
-            {busy === "create" ? "CREATING…" : "CREATE ROOM"}
-            <span aria-hidden="true">→</span>
-          </button>
-        </form>
-
-        <form
-          className="entry-form"
-          onSubmit={(event) => onSubmit(event, "join")}
-        >
-          <div className="entry-form-heading">
-            <span className="entry-form-icon" aria-hidden="true">↳</span>
-            <h2>Join a room</h2>
+            <button
+              type="button"
+              className={mode === "join" ? "is-selected" : ""}
+              aria-pressed={mode === "join"}
+              disabled={busy !== null}
+              onClick={() => setMode("join")}
+            >
+              Join a room
+            </button>
           </div>
 
-          <label htmlFor="join-name">Player name</label>
-          <input
-            id="join-name"
-            name="displayName"
-            type="text"
-            maxLength={40}
-            placeholder="Enter your name"
-            autoComplete="nickname"
-            required
-          />
-
-          <label htmlFor="room-code">Room code</label>
-          <input
-            id="room-code"
-            className="room-code-input"
-            name="roomCode"
-            type="text"
-            minLength={6}
-            maxLength={6}
-            placeholder="A1B2C3"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => {
-              event.currentTarget.value = event.currentTarget.value
-                .toUpperCase()
-                .replace(/[^0-9A-F]/g, "")
-                .slice(0, 6);
-            }}
-            required
-          />
-
-          <button
-            className="action-button secondary-button"
-            type="submit"
-            disabled={busy !== null}
+          <form
+            className="game-entry-form"
+            onSubmit={(event) => onSubmit(event, mode)}
           >
-            {busy === "join" ? "JOINING…" : "JOIN ROOM"}
-            <span aria-hidden="true">→</span>
-          </button>
-        </form>
-      </section>
+            <label htmlFor="entry-name">What should we call you?</label>
+            <input
+              id="entry-name"
+              name="displayName"
+              type="text"
+              maxLength={40}
+              placeholder="Your player name"
+              autoComplete="nickname"
+              disabled={busy !== null}
+              required
+            />
 
-      {notice && (
-        <div
-          className={`notice notice-${notice.kind} entry-notice`}
-          role={notice.kind === "error" ? "alert" : "status"}
-        >
-          {notice.text}
-        </div>
-      )}
+            {mode === "join" ? (
+              <>
+                <label htmlFor="room-code">Room code</label>
+                <input
+                  id="room-code"
+                  className="room-code-input"
+                  name="roomCode"
+                  type="text"
+                  minLength={6}
+                  maxLength={6}
+                  placeholder="A1B2C3"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy !== null}
+                  onChange={(event) => {
+                    event.currentTarget.value = event.currentTarget.value
+                      .toUpperCase()
+                      .replace(/[^0-9A-F]/g, "")
+                      .slice(0, 6);
+                  }}
+                  required
+                />
+              </>
+            ) : (
+              <p className="game-form-hint">
+                Create a room, share the code, and bring your friends.
+              </p>
+            )}
+
+            <button
+              className={`action-button ${
+                mode === "create" ? "primary-button" : "secondary-button"
+              }`}
+              type="submit"
+              disabled={busy !== null}
+            >
+              <span>
+                {busy
+                  ? mode === "create" ? "CREATING…" : "JOINING…"
+                  : mode === "create" ? "CREATE ROOM" : "JOIN ROOM"}
+              </span>
+              <span aria-hidden="true">↗</span>
+            </button>
+          </form>
+
+          {notice && (
+            <div
+              className={`notice notice-${notice.kind}`}
+              role={notice.kind === "error" ? "alert" : "status"}
+            >
+              {notice.text}
+            </div>
+          )}
+
+          <p className="game-boarding-footer">
+            <span aria-hidden="true">✦</span>
+            Every crew has a story. Yours starts here.
+          </p>
+        </section>
+      </div>
     </main>
   );
 }

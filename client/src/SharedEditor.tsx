@@ -42,6 +42,7 @@ interface Props {
   snapshot: SharedSnapshot;
   theme: "light" | "dark";
   editable: boolean;
+  selectedFunction?: string;
   onEdit: (name: string, body: string) => void;
   onWarning: (message: string) => void;
 }
@@ -55,14 +56,41 @@ export default function SharedEditor(props: Props) {
 
   latest.current = props;
 
-  const ownedName = props.snapshot.names.find(
-    (name) =>
-      props.snapshot.functions[name].ownerId === props.snapshot.playerId,
-  ) ?? null;
+  const ownedName =
+    props.snapshot.names.find(
+      (name) =>
+        props.snapshot.functions[name].ownerId ===
+        props.snapshot.playerId,
+    ) ?? null;
+
+  function revealFunction(name: string | undefined) {
+    if (!name) return;
+
+    const instance = editorRef.current;
+    const model = instance?.getModel();
+    const span = rendered.current?.spans[name];
+
+    if (!instance || !model || !span) return;
+
+    // The body starts immediately after the function's opening brace.
+    // Its position therefore points to the function declaration line
+    // for the generated programs.
+    const position = model.getPositionAt(span.start);
+
+    instance.setPosition({
+      lineNumber: position.lineNumber,
+      column: 1,
+    });
+
+    instance.revealLineNearTop(position.lineNumber);
+
+    
+  }
 
   useEffect(() => {
     const instance = editorRef.current;
     const model = instance?.getModel();
+
     if (!instance || !model) return;
 
     const next = layout(props.snapshot);
@@ -70,9 +98,13 @@ export default function SharedEditor(props: Props) {
 
     if (!previous) {
       applying.current = true;
-      model.setValue(next.source);
-      applying.current = false;
-      rendered.current = next;
+
+      try {
+        model.setValue(next.source);
+        rendered.current = next;
+      } finally {
+        applying.current = false;
+      }
     } else if (previous.source !== next.source) {
       const edits = props.snapshot.names.flatMap((name) => {
         const before = previous.spans[name];
@@ -80,23 +112,26 @@ export default function SharedEditor(props: Props) {
 
         if (!before || before.body === after.body) return [];
 
-        return [{
-          start: before.start,
-          end: before.end,
-          text: after.body,
-        }];
+        return [
+          {
+            start: before.start,
+            end: before.end,
+            text: after.body,
+          },
+        ];
       });
 
-      const positions = instance.getSelections()?.map((selection) => ({
-        anchor: model.getOffsetAt({
-          lineNumber: selection.selectionStartLineNumber,
-          column: selection.selectionStartColumn,
-        }),
-        active: model.getOffsetAt({
-          lineNumber: selection.positionLineNumber,
-          column: selection.positionColumn,
-        }),
-      })) ?? [];
+      const positions =
+        instance.getSelections()?.map((selection) => ({
+          anchor: model.getOffsetAt({
+            lineNumber: selection.selectionStartLineNumber,
+            column: selection.selectionStartColumn,
+          }),
+          active: model.getOffsetAt({
+            lineNumber: selection.positionLineNumber,
+            column: selection.positionColumn,
+          }),
+        })) ?? [];
 
       const scrollTop = instance.getScrollTop();
       const scrollLeft = instance.getScrollLeft();
@@ -110,8 +145,11 @@ export default function SharedEditor(props: Props) {
           if (offset >= edit.end) {
             difference += edit.text.length - (edit.end - edit.start);
           } else {
-            return edit.start + difference +
-              Math.min(offset - edit.start, edit.text.length);
+            return (
+              edit.start +
+              difference +
+              Math.min(offset - edit.start, edit.text.length)
+            );
           }
         }
 
@@ -121,33 +159,41 @@ export default function SharedEditor(props: Props) {
       applying.current = true;
 
       try {
-        model.applyEdits(edits.map((edit) => {
-          const start = model.getPositionAt(edit.start);
-          const end = model.getPositionAt(edit.end);
+        model.applyEdits(
+          edits.map((edit) => {
+            const start = model.getPositionAt(edit.start);
+            const end = model.getPositionAt(edit.end);
 
-          return {
-            range: {
-              startLineNumber: start.lineNumber,
-              startColumn: start.column,
-              endLineNumber: end.lineNumber,
-              endColumn: end.column,
-            },
-            text: edit.text,
-            forceMoveMarkers: true,
-          };
-        }));
+            return {
+              range: {
+                startLineNumber: start.lineNumber,
+                startColumn: start.column,
+                endLineNumber: end.lineNumber,
+                endColumn: end.column,
+              },
+              text: edit.text,
+              forceMoveMarkers: true,
+            };
+          }),
+        );
 
-        instance.setSelections(positions.map((position) => {
-          const anchor = model.getPositionAt(translate(position.anchor));
-          const active = model.getPositionAt(translate(position.active));
+        instance.setSelections(
+          positions.map((position) => {
+            const anchor = model.getPositionAt(
+              translate(position.anchor),
+            );
+            const active = model.getPositionAt(
+              translate(position.active),
+            );
 
-          return {
-            selectionStartLineNumber: anchor.lineNumber,
-            selectionStartColumn: anchor.column,
-            positionLineNumber: active.lineNumber,
-            positionColumn: active.column,
-          };
-        }));
+            return {
+              selectionStartLineNumber: anchor.lineNumber,
+              selectionStartColumn: anchor.column,
+              positionLineNumber: active.lineNumber,
+              positionColumn: active.column,
+            };
+          }),
+        );
 
         instance.setScrollPosition({ scrollTop, scrollLeft });
         rendered.current = next;
@@ -159,16 +205,18 @@ export default function SharedEditor(props: Props) {
     instance.updateOptions({ readOnly: !props.editable });
 
     if (ownedName && ownedName !== lastOwned.current) {
-      const span = next.spans[ownedName];
-      const position = model.getPositionAt(span.start);
-
-      instance.setPosition(position);
-      instance.revealLineInCenter(position.lineNumber);
+      revealFunction(ownedName);
       instance.focus();
     }
 
     lastOwned.current = ownedName;
   }, [props.snapshot, props.editable, ownedName]);
+
+  // Navigate only when the dropdown selection changes.
+  // Other players' edits must not repeatedly move your view.
+  useEffect(() => {
+    revealFunction(props.selectedFunction);
+  }, [props.selectedFunction]);
 
   function changed(value: string | undefined) {
     if (applying.current || value === undefined) return;
@@ -188,8 +236,13 @@ export default function SharedEditor(props: Props) {
 
     const span = name ? previous.spans[name] : null;
 
-    const prefix = span ? previous.source.slice(0, span.start) : "";
-    const suffix = span ? previous.source.slice(span.end) : "";
+    const prefix = span
+      ? previous.source.slice(0, span.start)
+      : "";
+
+    const suffix = span
+      ? previous.source.slice(span.end)
+      : "";
 
     const allowed =
       current.editable &&
@@ -203,10 +256,12 @@ export default function SharedEditor(props: Props) {
       applying.current = true;
 
       try {
-        model.applyEdits([{
-          range: model.getFullModelRange(),
-          text: previous.source,
-        }]);
+        model.applyEdits([
+          {
+            range: model.getFullModelRange(),
+            text: previous.source,
+          },
+        ]);
       } finally {
         applying.current = false;
       }
@@ -215,10 +270,14 @@ export default function SharedEditor(props: Props) {
         "Edit only inside your claimed function. Other functions, " +
           "signatures, outer braces and main() are protected.",
       );
+
       return;
     }
 
-    const body = value.slice(prefix.length, value.length - suffix.length);
+    const body = value.slice(
+      prefix.length,
+      value.length - suffix.length,
+    );
 
     rendered.current = layout({
       ...current.snapshot,
@@ -238,20 +297,38 @@ export default function SharedEditor(props: Props) {
     <Editor
       height="100%"
       language="cpp"
-     theme={props.theme === "dark" ? "ghost-dark" : "ghost-light"}
+      theme={props.theme === "dark" ? "ghost-dark" : "ghost-light"}
       path={`file:///ghost-writer/shared/${props.snapshot.matchId}/main.cpp`}
       defaultValue={layout(props.snapshot).source}
       onMount={(instance) => {
         editorRef.current = instance;
-        const initial = layout(latest.current.snapshot);
-        rendered.current = initial;
+
+        const current = latest.current;
+        const initial = layout(current.snapshot);
 
         applying.current = true;
-        instance.getModel()?.setValue(initial.source);
-        instance.updateOptions({
-          readOnly: !latest.current.editable,
-        });
-        applying.current = false;
+
+        try {
+          instance.getModel()?.setValue(initial.source);
+          instance.updateOptions({
+            readOnly: !current.editable,
+          });
+          rendered.current = initial;
+        } finally {
+          applying.current = false;
+        }
+
+        const initialOwned = current.snapshot.names.find(
+          (name) =>
+            current.snapshot.functions[name].ownerId ===
+            current.snapshot.playerId,
+        );
+
+        lastOwned.current = initialOwned ?? null;
+
+        revealFunction(
+          initialOwned ?? current.selectedFunction,
+        );
       }}
       onChange={changed}
       options={{

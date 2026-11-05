@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
 import GameStartSequence from "./GameStartSequence";
 import MatchResults, { type MatchSummary } from "./MatchResults";
+import GameArtwork from "./GameArtwork";
 import { FullscreenSetup } from "./FullscreenControls";
 import HackerSettings from "./HackerSettings";
 import EntryScreen from "./EntryScreen";
@@ -487,7 +488,7 @@ function App() {
     if (roomCode && playerId && room?.phase === "RESULTS") {
     if (!room.results) {
       return (
-        <main className="page-shell">
+        <main className="copy-button ui-danger">
           <p role="alert">The server returned incomplete match results.</p>
           <button
             className="copy-button"
@@ -536,10 +537,9 @@ function App() {
   <FullscreenSetup key={roomCode} roomCode={roomCode} />
 )}
         <header className="topbar">
-          <a className="brand" href="/" aria-label="Ghost Writer home">
-            <span className="brand-mark" aria-hidden="true">GW</span>
-            <span>GHOST WRITER</span>
-          </a>
+          <div className="brand">
+  <span>GHOST WRITER</span>
+</div>
 
           <div className="topbar-right">
             <span className="online-mark">
@@ -587,7 +587,7 @@ function App() {
                   : "Mark yourself ready when you’re set. The host will start the game."}
             </p>
           </div>
-
+                <GameArtwork className="lobby-artwork" />
           <aside className="brief-card">
             <div className="brief-topline">
               <span>ROOM STATUS</span>
@@ -727,7 +727,7 @@ function App() {
           )}
 
           <button
-            className="copy-button"
+            className="copy-button ui-danger"
             type="button"
             onClick={() => void leaveRoom()}
             disabled={lobbyBusy !== null}

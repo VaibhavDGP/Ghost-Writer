@@ -282,7 +282,7 @@ export default function GameStartSequence({
         <FullscreenButton />
 
         <button
-          className="copy-button"
+          className=	"copy-button ui-danger"
           type="button"
           onClick={onLeave}
           disabled={leaving}
